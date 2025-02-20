@@ -7,6 +7,8 @@ import { host, user, password, database } from './dbConfig.mjs';
 import enviaWhats from './data/enviaWhats/enviaWhats.mjs';
 
 const app = express();
+const nomeAPI = 'apiDDV1'
+
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -41,4 +43,4 @@ pool.getConnection((err, conn) => {
 
 
 
-export { app, pool};
+export { app, pool, nomeAPI};
