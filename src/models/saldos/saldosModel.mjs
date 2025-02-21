@@ -193,6 +193,7 @@ class SaldosModel {
                 });
 
                 const bancosComSaldo = await Promise.all(bancosBD.map(async (banco) => {
+                    //Busco o saldo inicial
                     const saldoInicialBD = await new Promise((resolve, reject) => {
                         const querySaldoInicial = 'SELECT saldo_inicial FROM banco WHERE id = ? AND casal = ?';
                         pool.query(querySaldoInicial, [banco.id, casal], (err, results) => {
@@ -204,10 +205,14 @@ class SaldosModel {
                     });
                     //Define saldo inicial do banco
                     const bancoId = banco.id
+                    const bancoNome = banco.nome
+                    const bancoTipo = banco.tipo
+                    const arquivo = banco.arquivo
                     const saldoInicial = saldoInicialBD[0].saldo_inicial;
+                    //Cria um Array de 12 posições preenchidos com 0
                     const saldoMensal = Array(12).fill(0);
 
-                    //Busca todas receitas dos bancos
+                    //Busca todas receitas dos bancos de um determinado ano agrupado por mês
                     const queryReceitas = 'SELECT SUM(valor) AS total, mes FROM receita WHERE banco = ? AND casal = ? AND ano = ? AND status = 1 GROUP BY mes ORDER BY mes';
                     const receitasBD = await new Promise((resolve, reject) => {
                         pool.query(queryReceitas, [banco.id, casal, ano], (err, results) => {
@@ -218,12 +223,12 @@ class SaldosModel {
                         });
                     });
 
-                    //Incrementa o saldo do banco mes a mes
+                    //Incrementa o saldo do banco mes a mes(adicionando as receitas)
                     receitasBD.forEach(({ total, mes }) => {
                         saldoMensal[mes] += total;
                     });
 
-                    //Busca todas despesas do banco
+                    //Busca todas despesas dos bancos de um determinado ano agrupado por mês
                     const queryDespesas = 'SELECT SUM(valor) AS total, mes FROM despesa WHERE banco = ? AND casal = ? AND ano = ? AND status = 1 GROUP BY mes ORDER BY mes';
                     const despesasBD = await new Promise((resolve, reject) => {
                         pool.query(queryDespesas, [banco.id, casal, ano], (err, results) => {
@@ -234,6 +239,7 @@ class SaldosModel {
                         });
                     });
 
+                    //Incrementa o saldo do banco mes a mes(reduzindo o saldo com as despesas)
                     despesasBD.forEach(({ total, mes }) => {
                         saldoMensal[mes] -= total;
                     });
@@ -266,18 +272,18 @@ class SaldosModel {
                         saldoMensal[mes] += total;
                     });
 
-                    console.log({bancoId, saldoInicial, receitasBD, despesasBD, transfCredBD, transfDebBD})
-                    return {bancoId, saldoInicial, receitasBD, despesasBD, transfCredBD, transfDebBD}
+                    //console.log({bancoId, saldoInicial, receitasBD, despesasBD, transfCredBD, transfDebBD})
+                    return {bancoNome, bancoId, saldoInicial, bancoTipo, arquivo, receitasBD, despesasBD, transfCredBD, transfDebBD, saldoMensal}
                 }));
 
                 return bancosComSaldo;
             };
 
             const queryBancoInd = 'SELECT * FROM banco WHERE casal = ? AND usuario = ? AND tipo = 0 AND arquivo = 0';
-            const saldosIndividuais = await getSaldos(queryBancoInd, [casal, usuario], [casal, usuario]);
+            const saldosIndividuais = await getSaldos(queryBancoInd, [casal, usuario]);
 
             const queryBancoCol = 'SELECT * FROM banco WHERE casal = ? AND tipo = 1 AND arquivo = 0';
-            const saldosColetivos = await getSaldos(queryBancoCol, [casal], [casal]);
+            const saldosColetivos = await getSaldos(queryBancoCol, [casal]);
 
             return callback(null, { saldosIndividuais, saldosColetivos });
         } catch (error) {

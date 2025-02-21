@@ -14,7 +14,7 @@ const enviaWhats = async (num, msg) => {
     
         return response.json();
     } catch (error) {
-        throw error
+        console.error(`Houve um erro no envio da mensagem de Whatsapp. ${error}`)
     }
 };
 
