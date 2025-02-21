@@ -21,7 +21,7 @@ const saldoPorPeriodo = (req, res) => {
 
     SaldosModel.saldoPorPeriodo(casal, usuario, parceiro, ano, (err, results) => {
         if (err) {
-            return res.status(500).json({ error: 'Erro ao encontrar os saldos' });
+            return res.status(500).json({ error: `Erro ao encontrar os saldos. ${err}` });
         }
 
         res.status(200).json({ message: 'OK', results });
