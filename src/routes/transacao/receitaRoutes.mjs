@@ -8,5 +8,6 @@ receitaRouter.delete('/deleteReceita', receitaController.deleteReceita)
 receitaRouter.get('/readReceitaID', receitaController.readReceitaID)
 receitaRouter.put('/editReceita', receitaController.editReceita)
 receitaRouter.put('/efetivaReceita', receitaController.efetivaReceita)
+receitaRouter.put('/editReceitaFixa', receitaController.editDespesaFixa)
 
 export default receitaRouter

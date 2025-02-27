@@ -1,5 +1,4 @@
 const SeparaData = async (data) => {
-    console.log(data)
     const [dataPart, horaPart] = data.split("T");
     const [ano, mes, dia] = dataPart.split("-");
     const [hora, minuto, segundo] = horaPart.split(":");

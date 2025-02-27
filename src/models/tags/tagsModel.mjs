@@ -50,6 +50,38 @@ class TagsModel {
             throw error
         }
     }
+
+    static editTag = async (idTag, casal, nome, callback) => {
+        try {
+            const query = `UPDATE tags SET nome = ? WHERE id = ? AND casal = ?`
+
+            pool.query(query, [nome, idTag, casal], (err, results) => {
+                if (err) {
+                    return callback(err, null)
+                }
+
+                return callback(null, results)
+            })
+        } catch (error) {
+            throw error
+        }
+    }
+
+    static deleteTag = async (idTag, casal, callback) => {
+        try {
+            const query = `DELETE FROM tags WHERE id = ? AND casal = ?`
+
+            pool.query(query, [idTag, casal], (err, results) => {
+                if (err) {
+                    return callback(err, null)
+                }
+
+                return callback(null, results)
+            })
+        } catch (error) {
+            throw error
+        }
+    }
 }
 
 export default TagsModel

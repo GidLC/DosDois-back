@@ -52,4 +52,39 @@ const readTagID = (req, res) => {
     }
 }
 
-export default {addTags, readAllTags, readTagID}
+const editTag = (req, res) => {
+    try {
+        const {auth, nome, id} = req.body
+
+        TagsModel.editTag(id, auth, nome, (err, results) => {
+            if(err) {
+                console.error(`Não foi possível editar essa tag. ${err}`)
+                res.status(500).json({error: `Não foi possível editar essa tag. ${err}`})
+            }
+
+            res.status(200).json({message: `Tag editada com sucesso`, results})
+        })
+    } catch (error) {
+        throw error
+    }
+}
+
+const deleteTag = (req, res) => {
+    try {
+        const casal = req.header('auth')
+        const idTag = req.header('id')
+
+        TagsModel.deleteTag(idTag, casal, (err, results) => {
+            if (err) {
+                console.error(`Não foi possível excluir essa tag. ${err}`)
+                res.status(500).json({error: `Não foi possível excluir essa tag. ${err}`})
+            }
+
+            res.status(200).json({message: `Tag excluida com sucesso`, results})
+        })
+    } catch (error) {
+        throw error
+    }
+}
+
+export default {addTags, readAllTags, readTagID, editTag, deleteTag}
