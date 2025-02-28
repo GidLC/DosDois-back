@@ -1,5 +1,6 @@
 import { pool } from "../../config.mjs";
 import SeparaData from "../../data/SeparaData/SeparaData.mjs";
+import * as crypto from 'crypto'
 
 class ReceitaModel {
 

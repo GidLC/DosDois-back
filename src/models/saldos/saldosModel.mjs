@@ -217,7 +217,6 @@ class SaldosModel {
 
                     //Cria um Array para inserir os saldos anuais (a qtd de posições é definida pelo ano da requisição - o ano 2024"inicio da aplicação")
                     const saldoAnual = Array(qtdAnos).fill(0)
-                    console.log(saldoAnual)
 
                     //Cria um Array de 12 posições preenchidos com 0 (representando cada um um mês)
                     const saldoMensal = Array(12).fill(0)
@@ -337,6 +336,26 @@ class SaldosModel {
 
                     await calculaSaldo(`mes`);
                     await calculaSaldo(`ano`);
+
+                    //Incrementa os saldos mensais conforme mês anterior
+                    for (let i = 0; i < 12; i++) {
+                        if (i == 0){
+                            saldoMensal[i] = saldoAnual[qtdAnos - 1]
+                        } else if (saldoMensal[i] === 0) {
+                            saldoMensal[i] = saldoMensal[i - 1] //Se o saldo estiver zerado recebe o saldo do mês anterior
+                        } else {
+                            saldoMensal[i] += saldoMensal[i - 1] //Se não recebe o saldo do mês vigente + mês anterior
+                        }
+                    }
+
+                    for (let i = 1; i < saldoAnual.length; i++) {
+                        if (saldoAnual[i] === 0) {
+                            saldoAnual[i] = saldoAnual[i - 1]; 
+                        } else {
+                            saldoAnual[i] += saldoAnual[i - 1];
+                        }
+                    }
+
 
 
                     //console.log({bancoId, saldoInicial, receitasBD, despesasBD, transfCredBD, transfDebBD})

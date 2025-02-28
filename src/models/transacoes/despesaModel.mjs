@@ -61,7 +61,7 @@ class DespesaModel {
                     for (let mes = mesInicial; mes < 12; mes++) {
                         promisses.push(
                             new Promise((resolve, reject) => {
-                                pool.query(query, [id_uuid, descricao, valor, tipo, status, objData.dia, mes, ano, `${objData.ano}-${objData.mes}-${objData.dia}`, cod_casal, usuario, banco, categoria, tag, obs], (err, results) => {
+                                pool.query(query, [id_uuid, descricao, valor, tipo, 0, objData.dia, mes, ano, `${objData.ano}-${objData.mes}-${objData.dia}`, cod_casal, usuario, banco, categoria, tag, obs], (err, results) => {
                                     if (err) {
                                         reject(err);
                                     }
