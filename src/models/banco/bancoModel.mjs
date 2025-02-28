@@ -39,7 +39,7 @@ class BancoModel {
             });
 
             //bancos coletivos
-            const queryBancoCol = 'SELECT id AS bancoId, nome AS bancoNome, tipo AS bancoTipo, saldo_inicial AS saldoInicial, arquivo FROM banco where casal = ? AND tipo = 1 AND arquivo = ? ORDER BY nome ASC';
+            const queryBancoCol = 'SELECT id, nome, tipo, saldo_inicial, arquivo FROM banco where casal = ? AND tipo = 1 AND arquivo = ? ORDER BY nome ASC';
             const bancosCol = await new Promise((resolve, reject) => {
                 pool.query(queryBancoCol, [cod_casal, arquivo], (err, results) => {
                     if (err) {
@@ -251,12 +251,13 @@ class BancoModel {
 
     static alteraSaldoincial = async (id, casal, novoSaldo, callback) => {
         try {
+            console.log({novoSaldo, id, casal})
             const query = 'UPDATE banco SET saldo_inicial = ? WHERE id = ? AND casal = ?'
             pool.query(query, [novoSaldo, id, casal], (err, results) => {
                 if (err) {
                     return callback(err, null)
                 }
-
+                console.log(results)
                 return callback(null, results)
             })
         } catch (error) {

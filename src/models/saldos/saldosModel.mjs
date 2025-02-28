@@ -198,6 +198,15 @@ class SaldosModel {
                     const bancoTipo = banco.tipo
                     const arquivo = banco.arquivo
 
+                    //Definir os saldos dos anos anteriores ao ano da requisição
+                    const qtdAnos = ano - 2024
+
+                    //Cria um Array para inserir os saldos anuais (a qtd de posições é definida pelo ano da requisição - o ano 2024"inicio da aplicação")
+                    const saldoAnual = Array(qtdAnos).fill(0)
+
+                    //Cria um Array de 12 posições preenchidos com 0 (representando cada um um mês)
+                    const saldoMensal = Array(12).fill(0)
+
                     //Busco o saldo inicial do banco
                     const saldoInicialBD = await new Promise((resolve, reject) => {
                         const querySaldoInicial = 'SELECT saldo_inicial FROM banco WHERE id = ? AND casal = ?';
@@ -211,15 +220,7 @@ class SaldosModel {
 
                     //Define saldo inicial do banco
                     const saldoInicial = saldoInicialBD[0].saldo_inicial;
-
-                    //Definir os saldos dos anos anteriores ao ano da requisição
-                    const qtdAnos = ano - 2024
-
-                    //Cria um Array para inserir os saldos anuais (a qtd de posições é definida pelo ano da requisição - o ano 2024"inicio da aplicação")
-                    const saldoAnual = Array(qtdAnos).fill(0)
-
-                    //Cria um Array de 12 posições preenchidos com 0 (representando cada um um mês)
-                    const saldoMensal = Array(12).fill(0)
+                    saldoAnual[0] += saldoInicial
 
                     const calculaSaldo = async (periodo /**ano ou mes */) => {
                         const paramsMes = [banco.id, casal, ano]
@@ -339,7 +340,7 @@ class SaldosModel {
 
                     //Incrementa os saldos mensais conforme mês anterior
                     for (let i = 0; i < 12; i++) {
-                        if (i == 0){
+                        if (i == 0) {
                             saldoMensal[i] = saldoAnual[qtdAnos - 1]
                         } else if (saldoMensal[i] === 0) {
                             saldoMensal[i] = saldoMensal[i - 1] //Se o saldo estiver zerado recebe o saldo do mês anterior
@@ -350,7 +351,7 @@ class SaldosModel {
 
                     for (let i = 1; i < saldoAnual.length; i++) {
                         if (saldoAnual[i] === 0) {
-                            saldoAnual[i] = saldoAnual[i - 1]; 
+                            saldoAnual[i] = saldoAnual[i - 1];
                         } else {
                             saldoAnual[i] += saldoAnual[i - 1];
                         }
