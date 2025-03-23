@@ -1,27 +1,23 @@
-import nodemailer from 'nodemailer';
-import { adminMail, adminPass, mailHost, mailPort } from '../emailConfig.mjs';
+import { apiEmailURL } from '../apiConfig.mjs';
 
-const enviaEmail = async(destinatario, assunto, conteudo) => {
+const enviaEmail = async (dest, assunto, cont) => {
     try {
-        const transpoter = nodemailer.createTransport({
-            host: mailHost,
-            port: mailPort,
-            secure: false,
-            auth: {
-                user: adminMail,
-                pass: adminPass
-            }
+        const response = await fetch(`${apiEmailURL}/enviaEmail`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(
+                {
+                    dest,
+                    assunto,
+                    cont
+                }
+            )
         })
 
-        const options = {
-            from: adminMail,
-            to: destinatario,
-            subject: assunto,
-            html: conteudo
-        }
-
-        return transpoter.sendMail(options)
-    } catch(error) {
+        return response.json()
+    } catch (error) {
         return `Houve um erro no envio do e-mail, ${error}`
     }
 }

@@ -1,4 +1,4 @@
-import { apiWhatsURL } from "../emailConfig.mjs";
+import { apiWhatsURL } from "../apiConfig.mjs";
 
 //Função acessa API externa para envio de whatsapp
 const enviaWhats = async (num, msg) => {

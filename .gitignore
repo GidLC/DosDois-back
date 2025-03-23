@@ -128,5 +128,5 @@ dist
 *env
 
 #Arquivos sensíveis
-emailConfig.mjs
+apiConfig.mjs
 dbConfig.mjs

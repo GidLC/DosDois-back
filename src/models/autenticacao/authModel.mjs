@@ -8,51 +8,53 @@ import enviaWhats from '../../data/enviaWhats/enviaWhats.mjs';
 class AuthModel {
 
   static cadastroUsuario = async (nome, email, senha, email_parceiro, fone, dt_criacao, callback) => {
-    const codigoCasal = crypto.randomBytes(3).toString('hex');
-    const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
+    try {
+      //Cria código exclusivo do casal
+      const codigoCasal = crypto.randomBytes(3).toString('hex');
+      const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
 
-    //categorias de despesa padrão: Alimentação, Moradia, transporte, saúde, educação, lazer, roupas e acessórios, água/luz/internet, despesas diversas
-    //categorias de receita padrão: Salário, rendimentos, presentes, vales
+      //categorias de despesa padrão: Alimentação, Moradia, transporte, saúde, educação, lazer, roupas e acessórios, água/luz/internet, despesas diversas
+      //categorias de receita padrão: Salário, rendimentos, presentes, receitas diversas
 
-    const queryUsuario = 'INSERT INTO usuario (nome, email, senha, email_parceiro, casal, dt_criacao, fone) VALUES (?, ?, ?, ?, ?, ?, ?)';
+      const queryUsuario = 'INSERT INTO usuario (nome, email, senha, email_parceiro, casal, dt_criacao, fone) VALUES (?, ?, ?, ?, ?, ?, ?)';
 
-    //Cria cadastro do usuário principal
-    const usuario = await new Promise((resolve, reject) => {
-      pool.query(queryUsuario, [nome, email, senhaHash, email_parceiro, codigoCasal, dt_criacao, fone], async (err, results) => {
-        if (err) {
-          reject(err)
-        }
+      //Cria cadastro do usuário principal
+      const usuario = await new Promise((resolve, reject) => {
+        pool.query(queryUsuario, [nome, email, senhaHash, email_parceiro, codigoCasal, dt_criacao, fone], async (err, results) => {
+          if (err) {
+            reject(err)
+          }
 
-        await enviaEmail(email,
-          "Cadastro no OneCash",
-          EmailCadastro(nome, codigoCasal)
-        );
+          await enviaEmail(email,
+            "Cadastro no OneCash",
+            EmailCadastro(nome, codigoCasal)
+          );
 
-        await enviaEmail(email_parceiro,
-          "Cadastro no OneCash",
-          EmailParceiro(nome, codigoCasal))
+          await enviaEmail(email_parceiro,
+            "Cadastro no OneCash",
+            EmailParceiro(nome, codigoCasal))
 
-        await enviaWhats(fone, `Você acaba de realizar o cadastro no app OneCash, para que seu parceiro se vincule a você ele precisa do código: ${codigoCasal}`)
+          await enviaWhats(fone, `Você acaba de realizar o cadastro no app DosDois, para que seu parceiro se vincule a você ele precisa do código: ${codigoCasal}`)
 
-        resolve(results)
+          resolve(results)
+        });
+      })
+
+      const userId = usuario.insertId;
+
+      //Cria tabela para vínculo do casal
+      const queryCasal = 'INSERT INTO casal (cod_casal, usuario_princ) VALUES (?, ?)';
+      await new Promise((resolve, reject) => {
+        pool.query(queryCasal, [codigoCasal, userId], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(results);
+        });
       });
-    })
 
-    const userId = usuario.insertId;
-
-    //Cria tabela para vínculo do casal
-    const queryCasal = 'INSERT INTO casal (cod_casal, usuario_princ) VALUES (?, ?)';
-    await new Promise((resolve, reject) => {
-      pool.query(queryCasal, [codigoCasal, userId], (err, results) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(results);
-      });
-    });
-
-    //Insere categorias padrões
-    const queryCategoria = `
+      //Insere categorias padrões
+      const queryCategoria = `
       INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Alimentação", 0, 2, 21, ?);
       INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Moradia", 0, 3, 27, ?);
       INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Transporte", 0, 4, 16, ?);
@@ -66,11 +68,10 @@ class AuthModel {
       INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Salário", 1, 11, 38, ?);
       INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Rendimentos", 1, 12, 37, ?);
       INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Presentes", 1, 13, 26, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Vales", 1, 14, 31, ?);
+      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Receitas Diversas", 1, 14, 31, ?);
       INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("*Ajuste*",1, 3, 37, ?);
       `;
 
-    try {
       const queries = queryCategoria.split(';').filter(query => query.trim() !== '');
       await Promise.all(queries.map((query) => {
         return new Promise((resolve, reject) => {
@@ -82,32 +83,32 @@ class AuthModel {
           });
         });
       }));
-    } catch (error) {
-      console.error("Erro ao inserir categorias:", error);
-    }
 
-    //Cria contas bancárias padrão
-    const queryBancos = `
-                          INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Carteira", 0, 0, ?, ?);
-                          INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Nossa Conta", 1, 0, ?, ?);`
-
-    try {
-      const queries = queryBancos.split(';').filter(query => query.trim() !== '');
-      await Promise.all(queries.map((query) => {
-        return new Promise((resolve, reject) => {
-          pool.query(query, [codigoCasal, userId], (err, results) => {
-            if (err) {
-              reject(err);
-            }
-            resolve(results);
-          });
+      await new Promise((resolve, reject) => {
+        pool.query(queryCasal, [codigoCasal, userId], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(results);
         });
-      }));
-    } catch (error) {
-      console.error("Erro ao inserir Bancos:", error);
-    }
+      });
 
-    return callback(null, "Usuário cadastrado")
+      //Cria contas bancárias padrão
+      const queryBanco = `INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Carteira", 0, 0, ?, ?);`
+
+      await new Promise((resolve, reject) => {
+        pool.query(queryBanco, [codigoCasal, userId], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(results);
+        });
+      });
+
+      return callback(null, "Usuário cadastrado")
+    } catch (error) {
+      return callback(`Houve um erro ao cadastrar o usuário. ${error}`, null)
+    }
   }
 
 
@@ -250,7 +251,7 @@ class AuthModel {
               }
             })
           });
-  
+
           return callback(null, {
             id: login[0].id,
             nome: login[0].nome,
@@ -287,7 +288,7 @@ class AuthModel {
           })
         }
       } else {
-        return callback({message: "Usuário sem parceiro vinculado a ele"})
+        return callback({ message: "Usuário sem parceiro vinculado a ele" })
       }
     } catch (error) {
       throw error
