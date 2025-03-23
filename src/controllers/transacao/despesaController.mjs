@@ -76,29 +76,17 @@ const editDespesaFixa = (req, res) => {
 }
 
 const deleteDespesa = (req, res) => {
-    const casal = req.header('auth');
-    const id = req.header('id');
-    const fixa = req.header('fixa');
+    const casal = req.header('auth')
+    const id = req.header('id')
+    const id_fixo = req.header('id_fixo')
+    const pend = req.header('pend')
 
-    DespesaModel.deleteDespesa(casal, id, fixa, (err, results) => {
+    DespesaModel.deleteDespesa(casal, id, id_fixo, pend, (err, results) => {
         if (err) {
-            console.error('Erro ao excluir despesa:', err);
-            return res.status(500).json({ error: 'Erro ao excluir despesa' });
+            console.error('Erro ao excluir despesa:', err)
+            return res.status(500).json({ error: 'Erro ao excluir despesa' })
         }
         res.status(200).json({ message: 'Despesa excluida com sucesso', results })
-    })
-}
-
-const deleteDespesaPend = (req, res) => {
-    const casal = req.header('auth');
-    const id_fixo = req.header('id_fixo');
-
-    DespesaModel.deleteDespesaPend(casal, id_fixo, (err, results) => {
-        if (err) {
-            return res.status(500).json({error: "Erro ao excluir as receitas"})
-        }
-
-        res.status(200).json({message: 'Despesas excluidas com sucesso', results});
     })
 }
 
@@ -117,4 +105,4 @@ const efetivaDespesa = (req, res) => {
 }
 
 
-export default { addDespesa, readDespesa, deleteDespesa, readDespesaID, editDespesa, editDespesaFixa, efetivaDespesa, deleteDespesaPend}
+export default { addDespesa, readDespesa, deleteDespesa, readDespesaID, editDespesa, editDespesaFixa, efetivaDespesa}

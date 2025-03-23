@@ -80,8 +80,10 @@ const deleteReceita = (req, res) => {
   const casal = req.header('auth');
   const usuario = req.header('usuario');
   const id = req.header('id');
+  const id_fixo = req.header('id_fixo')
+  const pend = req.header('pend')
 
-  ReceitaModel.deleteReceita(id, usuario, casal, (err, results) => {
+  ReceitaModel.deleteReceita(id, usuario, casal, pend, id_fixo, (err, results) => {
     if (err) {
       console.error('Erro ao excluir receita', err);
       return res.status(500).json({ message: 'Não foi possível excluir a receita' });

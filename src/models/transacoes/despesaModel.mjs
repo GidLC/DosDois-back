@@ -177,25 +177,14 @@ class DespesaModel {
         })
     }
 
-    static deleteDespesa = async (casal, id, fixa, callback) => {
-        const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
-        const query = `DELETE FROM ${tabela} WHERE casal = ? AND id = ?`;
+    static deleteDespesa = async (casal, id, id_fixo, pend, callback) => {
+        const tabela = (!id_fixo) ? 'despesa' : 'despesas_fixas';
+        const params = (pend == 1) ? [id_fixo, casal] : [id, casal]
+        const query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND casal = ?`;
 
-        pool.query(query, [casal, id], (err, results) => {
+        pool.query(query, params, (err, results) => {
             if (err) {
                 return callback(err, null)
-            }
-
-            return callback(null, results)
-        })
-    }
-
-    static deleteDespesaPend = async (casal, id_fixo, callback) => {
-        const query = `DELETE FROM despesas_fixas WHERE casal = ? AND id_fixo = ? AND status = 0`;
-
-        pool.query(query, [casal, id_fixo], (err, results) => {
-            if (err) {
-                return callback(err, null);
             }
 
             return callback(null, results)

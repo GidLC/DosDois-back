@@ -168,7 +168,7 @@ class ReceitaModel {
             if (err) {
                 return callback(err, null)
             }
-
+            console.log(results)
             return callback(null, results)
         })
     }
@@ -188,10 +188,12 @@ class ReceitaModel {
         })
     }
 
-    static deleteReceita = async (id, usuario, casal, callback) => {
-        const query = 'DELETE FROM receita WHERE id = ? AND usuario = ? AND casal = ?';
+    static deleteReceita = async (id, usuario, casal, pend, id_fixo, callback) => {
+        const tabela = (!id_fixo) ? 'receita' : 'receitas_fixas'
+        const params = (pend == 1) ? [id_fixo, usuario, casal] : [id, usuario, casal]
+        const query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND usuario = ? AND casal = ?`;
 
-        pool.query(query, [id, usuario, casal], (err, results) => {
+        pool.query(query, params, (err, results) => {
             if (err) {
                 return callback(err, null)
             }
