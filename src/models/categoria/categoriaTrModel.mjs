@@ -16,7 +16,8 @@ class CategoriaTrModel {
         const query = `SELECT cat.id, cat.nome, cat.cat_sistema, c.codigo AS cod_cor, ic.ion_nome AS icone FROM categoria_tr AS cat 
                         INNER JOIN cor AS c ON cat.cor = c.id 
                         INNER JOIN icones AS ic ON cat.icone = ic.id
-                            WHERE casal = ? AND tipo = ? AND cat_sistema != 1`
+                            WHERE casal = ? AND tipo = ? AND cat_sistema != 1
+                                ORDER BY cat.nome ASC`
         pool.query(query, [auth, tipo], (err, results) => {
             if (err) {
                 return callback(err, null)

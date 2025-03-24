@@ -27,7 +27,7 @@ class BancoModel {
     static readBanco = async (cod_casal, usuario, arquivo, callback) => {
         try {
             //bancos individuais
-            const queryBancoInd = 'SELECT id, nome, tipo, saldo_inicial, arquivo FROM banco where casal = ? AND usuario = ? AND tipo = 0 AND arquivo = ?';
+            const queryBancoInd = 'SELECT id, nome, tipo, saldo_inicial, arquivo FROM banco where casal = ? AND usuario = ? AND tipo = 0 AND arquivo = ? ORDER BY nome ASC';
             const bancosInd = await new Promise((resolve, reject) => {
                 pool.query(queryBancoInd, [cod_casal, usuario, arquivo], (err, results) => {
                     if (err) {
@@ -39,7 +39,7 @@ class BancoModel {
             });
 
             //bancos coletivos
-            const queryBancoCol = 'SELECT id, nome, tipo, saldo_inicial, arquivo FROM banco where casal = ? AND tipo = 1 AND arquivo = ?';
+            const queryBancoCol = 'SELECT id, nome, tipo, saldo_inicial, arquivo FROM banco where casal = ? AND tipo = 1 AND arquivo = ? ORDER BY nome ASC';
             const bancosCol = await new Promise((resolve, reject) => {
                 pool.query(queryBancoCol, [cod_casal, arquivo], (err, results) => {
                     if (err) {
@@ -49,8 +49,6 @@ class BancoModel {
                     resolve(results)
                 });
             });
-
-            console.log([...bancosInd, ...bancosCol])
 
             callback(null, [...bancosInd, ...bancosCol])
         } catch (error) {
@@ -253,12 +251,13 @@ class BancoModel {
 
     static alteraSaldoincial = async (id, casal, novoSaldo, callback) => {
         try {
+            console.log({novoSaldo, id, casal})
             const query = 'UPDATE banco SET saldo_inicial = ? WHERE id = ? AND casal = ?'
             pool.query(query, [novoSaldo, id, casal], (err, results) => {
                 if (err) {
                     return callback(err, null)
                 }
-
+                console.log(results)
                 return callback(null, results)
             })
         } catch (error) {

@@ -1,13 +1,13 @@
 import ReceitaModel from "../../models/transacoes/receitaModel.mjs";
 
 const addReceita = (req, res) => {
-  const { descricao, valor, categoria, status, data, banco, tipo, fixa } = req.body;
+  const { descricao, valor, categoria, status, data, banco, tipo, fixa, tag, obs, repetir } = req.body;
   const cod_casal = req.header('auth');
   const usuario = req.header('usuario')
-  ReceitaModel.addReceita(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, (err, resultado) => {
+  ReceitaModel.addReceita(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, tag, fixa, obs, repetir, (err, resultado) => {
     if (err) {
       console.error('Erro ao cadastrar receita:', err);
-      return res.status(500).json({ message: 'Erro ao cadastrar receita' });
+      return res.status(500).json({ message: `Erro ao cadastrar receita. ${err}`});
     }
     res.status(200).json({ message: 'Receita cadastrada com sucesso', resultado });
   });
@@ -18,11 +18,12 @@ const readReceita = (req, res) => {
   const usuario = req.header('usuario');
   const mes = req.header('mes');
   const ano = req.header('ano');
+  const fixa = req.header('fixa')
 
-  ReceitaModel.readReceita(usuario, casal, mes, ano, (err, results) => {
+  ReceitaModel.readReceita(usuario, casal, mes, ano, fixa, (err, results) => {
     if (err) {
       console.error('Erro ao Encontrar as receitas', err);
-      return res.status(500).json({ error: 'Erro ao buscar receitas' });
+      return res.status(500).json({ error: `Erro ao buscar receitas. ${err}` });
     }
 
     res.status(200).json({ message: 'Receitas encontradas', results })
@@ -33,8 +34,9 @@ const readReceitaID = (req, res) => {
   const id = req.header('id');
   const casal = req.header('auth');
   const usuario = req.header('usuario');
+  const fixa = req.header('fixa')
 
-  ReceitaModel.readReceitaID(id, usuario, casal, (err, results) => {
+  ReceitaModel.readReceitaID(id, usuario, casal, fixa, (err, results) => {
     if (err) {
       console.error('Erro ao Encontrar a receita', err);
       return res.status(500).json({ error: 'Erro ao buscar a receita' });
@@ -47,9 +49,8 @@ const readReceitaID = (req, res) => {
 const editReceita = (req, res) => {
   const casal = req.header('auth');
   const usuario = req.header('usuario');
-  const {id, descricao, categoria, valor, data, tipo, status} = req.body
-
-  ReceitaModel.editReceita(casal, usuario, tipo, id, descricao, categoria, valor, data, status, (err, results) => {
+  const {id, descricao, categoria, valor, data, tipo, status, tag, obs, fixa} = req.body
+  ReceitaModel.editReceita(casal, usuario, tipo, id, descricao, categoria, valor, data, status, tag, obs, fixa, (err, results) => {
     if (err) {
       console.error('Erro ao editar a receita', err);
       return res.status(500).json({ error: 'Erro ao editar a receita' });
@@ -59,12 +60,30 @@ const editReceita = (req, res) => {
   })
 }
 
+const editDespesaFixa = (req, res) => {
+  const casal = req.header('auth');
+  const pendentes = req.header('pend');
+  const { id_fixo, descricao, categoria, valor, data, tipo, status, tag, obs } = req.body
+
+  ReceitaModel.editReceitaFixa(casal, id_fixo, descricao, categoria, valor, data, tipo, status, pendentes, tag, obs, (err, results) => {
+      if (err) {
+          console.error('Erro ao editar a receita', err);
+          return res.status(500).json({ error: 'Erro ao editar a receita' });
+      }
+
+      res.status(200).json({ message: 'Receitas editadas com sucesso', results })
+  })
+
+}
+
 const deleteReceita = (req, res) => {
   const casal = req.header('auth');
   const usuario = req.header('usuario');
   const id = req.header('id');
+  const id_fixo = req.header('id_fixo')
+  const pend = req.header('pend')
 
-  ReceitaModel.deleteReceita(id, usuario, casal, (err, results) => {
+  ReceitaModel.deleteReceita(id, usuario, casal, pend, id_fixo, (err, results) => {
     if (err) {
       console.error('Erro ao excluir receita', err);
       return res.status(500).json({ message: 'Não foi possível excluir a receita' });
@@ -89,4 +108,4 @@ const efetivaReceita = (req, res) => {
 }
 
 
-export default { addReceita, readReceita, deleteReceita, readReceitaID, editReceita, efetivaReceita }
+export default { addReceita, readReceita, deleteReceita, readReceitaID, editReceita, efetivaReceita, editDespesaFixa }

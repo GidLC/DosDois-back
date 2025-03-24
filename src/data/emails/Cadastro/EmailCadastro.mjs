@@ -55,8 +55,6 @@ const EmailCadastro = (nome, codigoCasal) =>  {return `
 
 <body>
     <header class="cabecalho">
-        <img src="https://raw.githubusercontent.com/GidLC/OneCash-back/master/src/public/logo_capa.png"
-            alt="capa do aplicativo com fundo azul" class="imagem" />
     </header>
 
     <main class="container">

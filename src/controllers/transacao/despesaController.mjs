@@ -1,14 +1,14 @@
 import DespesaModel from "../../models/transacoes/despesaModel.mjs";
 
 const addDespesa = (req, res) => {
-    const { descricao, valor, categoria, status, data, banco, tipo, fixa } = req.body;
+    const { descricao, valor, categoria, status, data, banco, tipo, fixa, tag, obs, repetir } = req.body;
     const cod_casal = req.header('auth');
     const usuario = req.header('usuario')
 
-    DespesaModel.addDespesa(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, (err, resultado) => {
+    DespesaModel.addDespesa(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, (err, resultado) => {
         if (err) {
             console.error('Erro ao cadastrar despesa:', err);
-            return res.status(500).json({ error: 'Erro ao cadastrar despesa' })
+            return res.status(500).json({ error: `Erro ao cadastrar despesa. ${err}` })
         }
         res.status(200).json({ message: 'Despesa cadastrada com sucesso', resultado })
     });
@@ -47,9 +47,9 @@ const readDespesaID = (req, res) => {
 
 const editDespesa = (req, res) => {
     const casal = req.header('auth');
-    const { id, descricao, categoria, valor, data, tipo, status, fixa } = req.body
+    const { id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs } = req.body
 
-    DespesaModel.editDespesa(casal, id, descricao, categoria, valor, data, tipo, status, fixa, (err, results) => {
+    DespesaModel.editDespesa(casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, (err, results) => {
         if (err) {
             console.error('Erro ao editar a despesa', err);
             return res.status(500).json({ error: 'Erro ao editar a despesa' });
@@ -62,9 +62,9 @@ const editDespesa = (req, res) => {
 const editDespesaFixa = (req, res) => {
     const casal = req.header('auth');
     const pendentes = req.header('pend');
-    const { id_fixo, descricao, categoria, valor, data, tipo, status } = req.body
+    const { id_fixo, descricao, categoria, valor, data, tipo, status, tag, obs } = req.body
 
-    DespesaModel.editDespesaFixa(casal, id_fixo, descricao, categoria, valor, data, tipo, status, pendentes, (err, results) => {
+    DespesaModel.editDespesaFixa(casal, id_fixo, descricao, categoria, valor, data, tipo, status, pendentes, tag, obs, (err, results) => {
         if (err) {
             console.error('Erro ao editar a despesa', err);
             return res.status(500).json({ error: 'Erro ao editar a despesa' });
@@ -76,29 +76,17 @@ const editDespesaFixa = (req, res) => {
 }
 
 const deleteDespesa = (req, res) => {
-    const casal = req.header('auth');
-    const id = req.header('id');
-    const fixa = req.header('fixa');
+    const casal = req.header('auth')
+    const id = req.header('id')
+    const id_fixo = req.header('id_fixo')
+    const pend = req.header('pend')
 
-    DespesaModel.deleteDespesa(casal, id, fixa, (err, results) => {
+    DespesaModel.deleteDespesa(casal, id, id_fixo, pend, (err, results) => {
         if (err) {
-            console.error('Erro ao excluir despesa:', err);
-            return res.status(500).json({ error: 'Erro ao excluir despesa' });
+            console.error('Erro ao excluir despesa:', err)
+            return res.status(500).json({ error: 'Erro ao excluir despesa' })
         }
         res.status(200).json({ message: 'Despesa excluida com sucesso', results })
-    })
-}
-
-const deleteDespesaPend = (req, res) => {
-    const casal = req.header('auth');
-    const id_fixo = req.header('id_fixo');
-
-    DespesaModel.deleteDespesaPend(casal, id_fixo, (err, results) => {
-        if (err) {
-            return res.status(500).json({error: "Erro ao excluir as receitas"})
-        }
-
-        res.status(200).json({message: 'Despesas excluidas com sucesso', results});
     })
 }
 
@@ -117,4 +105,4 @@ const efetivaDespesa = (req, res) => {
 }
 
 
-export default { addDespesa, readDespesa, deleteDespesa, readDespesaID, editDespesa, editDespesaFixa, efetivaDespesa, deleteDespesaPend}
+export default { addDespesa, readDespesa, deleteDespesa, readDespesaID, editDespesa, editDespesaFixa, efetivaDespesa}
