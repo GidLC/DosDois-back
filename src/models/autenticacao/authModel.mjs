@@ -84,15 +84,6 @@ class AuthModel {
         });
       }));
 
-      await new Promise((resolve, reject) => {
-        pool.query(queryCasal, [codigoCasal, userId], (err, results) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(results);
-        });
-      });
-
       //Cria contas bancárias padrão
       const queryBanco = `INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Carteira", 0, 0, ?, ?);`
 
