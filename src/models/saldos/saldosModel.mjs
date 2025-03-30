@@ -248,6 +248,28 @@ class SaldosModel {
                             });
                         }
 
+                        //Busca todas receitas fixas do bancos de um determinado ano agrupado por mês
+                        const queryReceitasFixas = `SELECT SUM(valor) AS total, ${periodo} FROM receitas_fixas WHERE banco = ? AND casal = ? ${periodo == `mes` ? `AND ano = ?` : ``} AND status = 1 GROUP BY ${periodo} ORDER BY ${periodo}`
+                        const receitasFixasBD = await new Promise((resolve, reject) => {
+                            pool.query(queryReceitasFixas, periodo == `mes` ? paramsMes : paramsAno, (err, results) => {
+                                if (err) {
+                                    reject(err);
+                                }
+                                resolve(results);
+                            });
+                        });
+
+                        //Incrementa o saldo do banco adicionando as receitas fixas
+                        if (periodo == `mes`) {
+                            receitasFixasBD.forEach(({ total, mes }) => {
+                                saldoMensal[mes] += total;
+                            });
+                        } else {
+                            receitasFixasBD.forEach(({ total, ano }) => {
+                                saldoAnual[ano - 2024] += total
+                            });
+                        }
+
 
                         //Busca todas despesas dos bancos de um determinado ano agrupado por mês
                         const queryDespesas = `SELECT SUM(valor) AS total, ${periodo} FROM despesa WHERE banco = ? AND casal = ? ${periodo == `mes` ? `AND ano = ?` : ``} AND status = 1 GROUP BY ${periodo} ORDER BY ${periodo}`
