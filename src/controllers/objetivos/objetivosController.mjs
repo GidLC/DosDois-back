@@ -65,7 +65,7 @@ const aporteObjetivo = (req, res) => {
             return res.status(500).json({ error: 'Não foi possível registrar esse depósito' })
         }
 
-        res.status(200).json({ message: 'Depóstio registrado com sucesso', results })
+        res.status(200).json({ message: 'Depósitio registrado com sucesso', results })
     })
 }
 

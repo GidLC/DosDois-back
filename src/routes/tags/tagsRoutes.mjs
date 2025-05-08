@@ -7,5 +7,6 @@ tagsRouter.get('/readAllTags', tagsController.readAllTags)
 tagsRouter.get('/readTagID', tagsController.readTagID)
 tagsRouter.put('/editTag', tagsController.editTag)
 tagsRouter.delete('/deleteTag', tagsController.deleteTag)
+tagsRouter.get('/readTagsByTermo', tagsController.readTagsByTermo)
 
 export default tagsRouter

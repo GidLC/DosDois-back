@@ -72,7 +72,7 @@ const editTag = (req, res) => {
 const deleteTag = (req, res) => {
     try {
         const casal = req.header('auth')
-        const idTag = req.header('id')
+        const idTag = req.header('idTag')
 
         TagsModel.deleteTag(idTag, casal, (err, results) => {
             if (err) {
@@ -87,4 +87,22 @@ const deleteTag = (req, res) => {
     }
 }
 
-export default {addTags, readAllTags, readTagID, editTag, deleteTag}
+const readTagsByTermo = (req, res) => {
+    try {
+        const termo = req.header('termo')
+        const casal = req.header('auth')
+
+        TagsModel.readTagsByTermo(termo, casal, (err, results) => {
+            if (err) {
+                console.error(`Não foi possível buscar as tags cadastradas`)
+                res.status(500).json({error: `Não foi possível buscar as tags cadastrada. ${err}`})
+            }
+
+            res.status(200).json({message: `OK`, results})
+        })
+    } catch (error) {
+        console.log(`Não foi possível buscar as tags. ${error}`)
+    }
+}
+
+export default {addTags, readAllTags, readTagID, editTag, deleteTag, readTagsByTermo}

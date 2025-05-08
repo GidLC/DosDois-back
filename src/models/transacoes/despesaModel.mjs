@@ -96,13 +96,13 @@ class DespesaModel {
                 SELECT des.id, des.descricao, des.valor, des.dia, des.mes, des.ano, des.status, des.obs,
                        cat.nome AS nome_categoria, ic.ion_nome AS nome_icone, 
                        cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria,
-                       tags.id AS id_tag, tags.nome AS nome_tag${camposFixos}
+                       t.id AS id_tag, t.nome AS nome_tag${camposFixos}
                 FROM ${tabela} AS des
                 INNER JOIN categoria_tr AS cat ON cat.id = des.categoria
                 INNER JOIN icones AS ic ON ic.id = cat.icone
                 INNER JOIN cor ON cor.id = cat.cor
                 INNER JOIN banco AS ba ON ba.id = des.banco
-                LEFT JOIN tags ON tags.id = des.tag
+                LEFT JOIN tags AS t ON t.id = des.tag
                 WHERE des.casal = ? AND des.mes = ? AND des.ano = ? AND des.tipo = ?`;
 
             // Adiciona condição extra para despesas individuais
@@ -130,9 +130,10 @@ class DespesaModel {
             const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
             const camposFixos = (fixa == 1) ? ', des.id_fixo, des.data_criacao' : '';
             const query = `SELECT des.id, des.descricao, des.valor, des.tipo, des.dia, des.mes, des.ano, des.status, des.obs, cat.id AS id_categoria, cat.nome AS nome_categoria, 
-                        ba.id AS id_banco, ba.nome AS nome_banco${camposFixos} FROM ${tabela} AS des
+                        ba.id AS id_banco, ba.nome AS nome_banco, t.id AS id_tag, t.nome AS nome_tag${camposFixos} FROM ${tabela} AS des
                             INNER JOIN categoria_tr AS cat ON cat.id = des.categoria
                             INNER JOIN banco AS ba ON ba.id = des.banco
+                            INNER JOIN tags AS t ON t.id = des.tag
                                 WHERE des.id = ? AND des.casal = ?`;
 
             pool.query(query, [id, casal], (err, results) => {
@@ -147,12 +148,12 @@ class DespesaModel {
         }
     }
 
-    //Através dessa edição só é possível editar uma despesa fixa
-    static editDespesa = async (casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, callback) => {
+    //Através dessa edição só é possível editar uma despesa
+    static editDespesa = async (casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco, callback) => {
         const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
-        const query = `UPDATE ${tabela} SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ? WHERE casal = ? AND id = ?`
+        const query = `UPDATE ${tabela} SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ?, banco = ? WHERE casal = ? AND id = ?`
         const objData = await SeparaData(data)
-        pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, casal, id], (err, results) => {
+        pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, casal, id], (err, results) => {
             if (err) {
                 return callback(err, null)
             }
@@ -163,12 +164,11 @@ class DespesaModel {
 
 
     //Função para editar todas despesas fixas e pendentes
-
-    static editDespesaFixa = async (casal, id_fixo, descricao, categoria, valor, data, tipo, status, pendentes, tag, obs, callback) => {
-        const query = `UPDATE despesas_fixas SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ? WHERE casal = ? AND id_fixo = ? ${pendentes == 1 ? `AND status = 0` : ``}`;
+    static editDespesaFixa = async (casal, id_fixo, descricao, categoria, valor, data, tipo, pendentes, tag, obs, callback) => {
+        const query = `UPDATE despesas_fixas SET descricao = ?, categoria = ?, valor = ?, dia = ?, tipo = ?, tag = ?, obs = ? WHERE casal = ? AND id_fixo = ? ${parseInt(pendentes) ? `AND status = 0` : ``}`;
         const objData = await SeparaData(data);
-        console.log(query)
-        pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, casal, id_fixo], (err, results) => {
+
+        pool.query(query, [descricao, categoria, valor, objData.dia, tipo, tag, obs, casal, id_fixo], (err, results) => {
             if (err) {
                 return callback(err, null);
             }
@@ -178,7 +178,7 @@ class DespesaModel {
     }
 
     static deleteDespesa = async (casal, id, id_fixo, pend, callback) => {
-        const tabela = (!id_fixo) ? 'despesa' : 'despesas_fixas';
+        const tabela = (id_fixo == 'undefined') ? 'despesa' : 'despesas_fixas';
         const params = (pend == 1) ? [id_fixo, casal] : [id, casal]
         const query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND casal = ?`;
 
@@ -192,7 +192,7 @@ class DespesaModel {
     }
 
     static efetivaDespesa = async (casal, despesaId, fixa, callback) => {
-        //Verificar se a despesa já está efetivada
+        console.log(fixa)
         const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
         const query = `UPDATE ${tabela} SET status = 1 WHERE casal = ? AND id = ?`;
 
