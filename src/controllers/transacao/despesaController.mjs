@@ -36,10 +36,15 @@ const readDespesaID = (req, res) => {
     const casal = req.header('auth');
     const fixa = req.header('fixa');
 
-    DespesaModel.readDespesaID(id, casal, fixa, (err, results) => {
+    DespesaModel.readDespesaID(id, casal, Number(fixa), (err, results) => {
         if (err) {
             console.error('Erro ao encontrar despesa:', err);
             return res.status(500).json({ error: 'Erro ao encontrar despesa' });
+        }
+
+        if (results == undefined) {
+            console.error(`Nenhuma despesa encontrada. Há algum erro na requisição`)
+            return res.status(400). json({message: `Nenhuma despesa encontrada. Há algum erro na requisição`})
         }
         res.status(200).json({ message: 'Despesa encontrada com sucesso', results })
     })
