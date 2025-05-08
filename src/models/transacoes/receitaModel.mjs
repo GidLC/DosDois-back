@@ -6,7 +6,7 @@ class ReceitaModel {
 
     static addReceita = async (descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, tag, fixa, obs, repetir, callback) => {
         try {
-            console.log({descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, tag, fixa, obs, repetir})
+            console.log({ descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, tag, fixa, obs, repetir })
             const objData = await SeparaData(data)
             const anoAtual = new Date().getFullYear();
 
@@ -21,6 +21,7 @@ class ReceitaModel {
                 for (let i = 0; i < repetir; i++) {
                     let descricaoRep = ""
 
+                    //Caso a receita se repita
                     if (repetir > 1) {
                         descricaoRep = `${descricao}(${i + 1}/${repetir})`
                         //Incrementa o mês a partir da segunda repetição e o ano a partir do próximo janeiro existente no período
@@ -46,7 +47,7 @@ class ReceitaModel {
                 }
 
                 await Promise.all(promisses);
-                return callback(null, { message: 'Receita cadastrada com sucesso!'})
+                return callback(null, { message: 'Receita cadastrada com sucesso!' })
 
             } else if (fixa == 1) {
                 //Cadastro de receita fixa
@@ -160,26 +161,25 @@ class ReceitaModel {
         }
     }
 
-    static editReceita = async (casal, usuario, tipo, id, descricao, categoria, valor, data, status, tag, obs, fixa, callback) => {
+    //Edita uma receita específica
+    static editReceita = async (casal, tipo, id, descricao, categoria, valor, data, status, tag, obs, fixa, banco, callback) => {
         const tabela = (fixa == 0 || !fixa) ? 'receita' : 'receitas_fixas';
-        const query = `UPDATE ${tabela} SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ? WHERE casal = ? AND id = ?`
+        const query = `UPDATE ${tabela} SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ?, banco = ? WHERE casal = ? AND id = ?`
         const objData = await SeparaData(data)
-        pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, casal, id], (err, results) => {
+        pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, casal, id], (err, results) => {
             if (err) {
                 return callback(err, null)
             }
-            console.log(results)
             return callback(null, results)
         })
     }
 
-    //Função para editar todas receitas fixas e pendentes
-
-    static editReceitaFixa = async (casal, id_fixo, descricao, categoria, valor, data, tipo, status, pendentes, tag, obs, callback) => {
-        const query = `UPDATE receitas_fixas SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ? WHERE casal = ? AND id_fixo = ? ${pendentes == 1 ? `AND status = 0` : ``}`;
+    //Função para editar todas receitas fixas ou pendentes
+    static editReceitaFixa = async (casal, id_fixo, descricao, categoria, valor, data, tipo, pendentes, tag, obs, callback) => {
+        const query = `UPDATE receitas_fixas SET descricao = ?, categoria = ?, valor = ?, dia = ?, tipo = ?, tag = ?, obs = ? WHERE casal = ? AND id_fixo = ? ${parseInt(pendentes) == 1 ? `AND status = 0` : ``}`;
         const objData = await SeparaData(data);
 
-        pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, casal, id_fixo], (err, results) => {
+        pool.query(query, [descricao, categoria, valor, objData.dia, tipo, tag, obs, casal, id_fixo], (err, results) => {
             if (err) {
                 return callback(err, null);
             }
@@ -189,9 +189,19 @@ class ReceitaModel {
     }
 
     static deleteReceita = async (id, usuario, casal, pend, id_fixo, callback) => {
-        const tabela = (!id_fixo) ? 'receita' : 'receitas_fixas'
-        const params = (pend == 1) ? [id_fixo, usuario, casal] : [id, usuario, casal]
-        const query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND usuario = ? AND casal = ?`;
+        let tabela
+        let params
+        let query
+        //Excluir todas as receitas fixas
+        if (id_fixo != 'undefined' && pend != 1) {
+            query = `DELETE FROM receitas_fixas WHERE id_fixo = ? AND casal = ?`
+            params = [id_fixo, casal]
+        } else {
+            tabela = (!id_fixo || id_fixo == 'undefined') ? 'receita' : 'receitas_fixas'
+            //Exclui apenas as pendentes
+            params = (pend == 1) ? [id_fixo, usuario, casal] : [id, usuario, casal]
+            query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND usuario = ? AND casal = ?`
+        }
 
         pool.query(query, params, (err, results) => {
             if (err) {
@@ -202,8 +212,10 @@ class ReceitaModel {
         })
     }
 
-    static efetivaReceita = async (casal, receitaId, callback) => {
-        const query = 'UPDATE receita SET status = 1 WHERE casal = ? AND id = ?';
+    static efetivaReceita = async (casal, receitaId, fixa, callback) => {
+        const table = (fixa == 0 || !fixa ? "receita" : "receitas_fixas");
+
+        const query = `UPDATE ${table} SET status = 1 WHERE casal = ? AND id = ?`;
 
         pool.query(query, [casal, receitaId], (err, results) => {
             if (err) {

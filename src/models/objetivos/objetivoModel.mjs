@@ -60,25 +60,32 @@ class ObjetivoModel {
             const obj = await new Promise((resolve, reject) => {
                 pool.query(queryObj, [casal, id], (err, results) => {
                     if (err) {
-                        reject(err)
+                        return reject(err)
+                    }
+                    if (!results || results.length === 0) {
+                        return reject(new Error('Objetivo não encontrado'))
                     }
                     resolve(results[0])
                 })
             })
+
+
             const valorAportes = await new Promise((resolve, reject) => {
                 const queryAportes = 'SELECT SUM(valor) as valor FROM aporte_objetivo WHERE objetivo = ?'
-                pool.query(queryAportes, [obj.id], (err, results) => {
+                pool.query(queryAportes, [id], (err, results) => {
                     if (err) {
-                        reject(err)
+                        return reject(err)
                     }
-                    resolve(results)
+                    resolve(results[0]?.valor ?? 0)
                 })
             })
 
-            const valorAtual = valorAportes[0].valor + obj.valor_inicial
+            const valorInicial = obj.valor_inicial ?? 0
+            const valorAtual = valorAportes + valorInicial
+
+
             const objetivo = { ...obj, valorAtual }
             return callback(null, objetivo)
-
         } catch (error) {
             return callback(error, null)
         }
@@ -97,7 +104,7 @@ class ObjetivoModel {
     }
 
     static aporteValor = (objetivoId, valor, casal, callback) => {
-        const query = 'INSERT INTO aporte_objetivo (valor, objetivo, casal) VALUES (?,?,?)'
+        const query = 'INSERT INTO aporte_objetivo (valor, objetivo, casal, data) VALUES (?,?,?, NOW())'
 
         pool.query(query, [valor, objetivoId, casal], (err, results) => {
             if (err) {

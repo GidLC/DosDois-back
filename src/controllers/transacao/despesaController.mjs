@@ -47,9 +47,9 @@ const readDespesaID = (req, res) => {
 
 const editDespesa = (req, res) => {
     const casal = req.header('auth');
-    const { id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs } = req.body
+    const { id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco } = req.body
 
-    DespesaModel.editDespesa(casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, (err, results) => {
+    DespesaModel.editDespesa(casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco, (err, results) => {
         if (err) {
             console.error('Erro ao editar a despesa', err);
             return res.status(500).json({ error: 'Erro ao editar a despesa' });
@@ -62,9 +62,9 @@ const editDespesa = (req, res) => {
 const editDespesaFixa = (req, res) => {
     const casal = req.header('auth');
     const pendentes = req.header('pend');
-    const { id_fixo, descricao, categoria, valor, data, tipo, status, tag, obs } = req.body
+    const { id_fixo, descricao, categoria, valor, data, tipo, tag, obs } = req.body
 
-    DespesaModel.editDespesaFixa(casal, id_fixo, descricao, categoria, valor, data, tipo, status, pendentes, tag, obs, (err, results) => {
+    DespesaModel.editDespesaFixa(casal, id_fixo, descricao, categoria, valor, data, tipo, pendentes, tag, obs, (err, results) => {
         if (err) {
             console.error('Erro ao editar a despesa', err);
             return res.status(500).json({ error: 'Erro ao editar a despesa' });
