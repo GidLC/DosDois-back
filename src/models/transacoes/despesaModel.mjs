@@ -133,7 +133,7 @@ class DespesaModel {
                         ba.id AS id_banco, ba.nome AS nome_banco, t.id AS id_tag, t.nome AS nome_tag${camposFixos} FROM ${tabela} AS des
                             INNER JOIN categoria_tr AS cat ON cat.id = des.categoria
                             INNER JOIN banco AS ba ON ba.id = des.banco
-                            INNER JOIN tags AS t ON t.id = des.tag
+                            LEFT JOIN tags AS t ON t.id = des.tag
                                 WHERE des.id = ? AND des.casal = ?`;
 
             pool.query(query, [id, casal], (err, results) => {
@@ -192,7 +192,6 @@ class DespesaModel {
     }
 
     static efetivaDespesa = async (casal, despesaId, fixa, callback) => {
-        console.log(fixa)
         const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
         const query = `UPDATE ${tabela} SET status = 1 WHERE casal = ? AND id = ?`;
 
