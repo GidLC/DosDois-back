@@ -61,10 +61,21 @@ class graficosModel {
                     resolve(results);
                 });
             });
+            const saldoFixaPorCategoriaBD = await new Promise((resolve, reject) => {
+                const querySaldoPorCategoria = 'SELECT SUM(valor) AS total_despesas FROM despesas_fixas WHERE categoria = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? AND tipo = ?';
+                pool.query(querySaldoPorCategoria, [categoria.id, casal, usuario, mes, ano, tipo], (err, results) => {
+                    if (err) {
+                        reject(err);
+                    }
+                    resolve(results);
+                });
+            });
 
             const saldoPorCategoria = saldoPorCategoriaBD[0].total_despesas || 0
+            const saldoFixaPorCategoria = saldoFixaPorCategoriaBD[0].total_despesas || 0
 
-            return { ...categoria, saldoPorCategoria }
+
+            return { ...categoria, saldoPorCategoria: saldoPorCategoria + saldoFixaPorCategoria}
 
         }));
 
