@@ -132,6 +132,7 @@ class ReceitaModel {
 
 
             const receitas = (ajuste == 1 || ajuste != 0) ? [...receitasInd, ...receitasCol] : receitasInd
+            console.log(ajuste)
             return callback(null, receitas)
         } catch (error) {
             console.error('Erro ao executar consulta:', error);
