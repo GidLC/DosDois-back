@@ -37,7 +37,7 @@ class graficosModel {
         return callback(null, categoriasComSaldo)
     }
 
-    static despesaPorCategoria = async (casal, usuario, mes, ano, tipo, callback) => {
+    static despesaPorCategoria = async (casal, usuario, mes, ano, parceiro, tipo, callback) => {
         const queryCategoria = `SELECT cat.id, cat.nome, cat.cat_sistema, c.codigo AS cod_cor, ic.ion_nome AS icone FROM categoria_tr AS cat 
                                     INNER JOIN cor AS c ON cat.cor = c.id 
                                     INNER JOIN icones AS ic ON cat.icone = ic.id
@@ -52,31 +52,38 @@ class graficosModel {
         });
 
         const saldos = await Promise.all(categoriasBD.map(async (categoria) => {
-            const saldoPorCategoriaBD = await new Promise((resolve, reject) => {
-                const querySaldoPorCategoria = 'SELECT SUM(valor) AS total_despesas FROM despesa WHERE categoria = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? AND tipo = ?';
-                pool.query(querySaldoPorCategoria, [categoria.id, casal, usuario, mes, ano, tipo], (err, results) => {
-                    if (err) {
-                        reject(err);
-                    }
-                    resolve(results);
+            //saldo de despesas normais
+
+            const calculaSaldo = async (fixa, cadParceiro) => {
+                const table = (fixa == 1) ? "despesas_fixas" : "despesa"
+                const idUsuario = (cadParceiro == 1) ? parceiro : usuario
+
+                const saldoPorCategoriaBD = await new Promise((resolve, reject) => {
+                    const querySaldoPorCategoria = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE categoria = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? AND tipo = ?`
+                    pool.query(querySaldoPorCategoria, [categoria.id, casal, idUsuario, mes, ano, tipo], (err, results) => {
+                        if (err) {
+                            reject(err);
+                        }
+                        resolve(results);
+                    });
                 });
-            });
-            const saldoFixaPorCategoriaBD = await new Promise((resolve, reject) => {
-                const querySaldoPorCategoria = 'SELECT SUM(valor) AS total_despesas FROM despesas_fixas WHERE categoria = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? AND tipo = ?';
-                pool.query(querySaldoPorCategoria, [categoria.id, casal, usuario, mes, ano, tipo], (err, results) => {
-                    if (err) {
-                        reject(err);
-                    }
-                    resolve(results);
-                });
-            });
 
-            const saldoPorCategoria = saldoPorCategoriaBD[0].total_despesas || 0
-            const saldoFixaPorCategoria = saldoFixaPorCategoriaBD[0].total_despesas || 0
+                return saldoPorCategoriaBD[0].total_despesas || 0
+            }
 
+            if (tipo == 0) {
+                const saldoPCatUserNormal = await calculaSaldo(0, 0)
+                const saldoPCatUserFixa = await calculaSaldo(1, 0)
 
-            return { ...categoria, saldoPorCategoria: saldoPorCategoria + saldoFixaPorCategoria}
+                return { ...categoria, saldoPorCategoria: saldoPCatUserNormal + saldoPCatUserFixa }
+            } else if (tipo = 1) {
+                const saldoPCatUserNormal = await calculaSaldo(0, 0)
+                const saldoPCatUserFixa = await calculaSaldo(1, 0)
+                const saldoPCatParcNormal = await calculaSaldo(0, 1)
+                const saldoPCatParcFixa = await calculaSaldo(1, 1)
 
+                return { ...categoria, saldoPorCategoria: saldoPCatUserNormal + saldoPCatUserFixa + saldoPCatParcNormal + saldoPCatParcFixa}
+            }
         }));
 
         const categoriasComSaldo = saldos.filter(saldo => saldo.saldoPorCategoria > 0)

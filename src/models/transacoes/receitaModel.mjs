@@ -87,7 +87,7 @@ class ReceitaModel {
         }
     }
 
-    static readReceita = async (usuario, casal, mes, ano, fixa, callback) => {
+    static readReceita = async (usuario, casal, mes, ano, fixa, ajuste, callback) => {
         try {
             const tabela = (fixa == 0 || !fixa) ? 'receita' : 'receitas_fixas';
             const camposFixos = (fixa == 1) ? ', rec.id_fixo, rec.data_criacao' : '';
@@ -131,7 +131,7 @@ class ReceitaModel {
             })
 
 
-            const receitas = (fixa == 0 || !fixa) ? [...receitasInd, ...receitasCol] : receitasInd
+            const receitas = (ajuste == 1 || ajuste != 0) ? [...receitasInd, ...receitasCol] : receitasInd
             return callback(null, receitas)
         } catch (error) {
             console.error('Erro ao executar consulta:', error);

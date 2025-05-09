@@ -21,8 +21,9 @@ const despesaPorCategoria = (req, res) => {
     const mes = req.header('mes')
     const ano = req.header('ano')
     const tipo = req.header('tipo')
+    const parceiro = req.header('parc')
     
-    graficosModel.despesaPorCategoria(casal, usuario, mes, ano, tipo, (err, results) => {
+    graficosModel.despesaPorCategoria(casal, usuario, mes, ano, parceiro, tipo, (err, results) => {
         if(err) {
             return res.status(500).json({error: 'Não foi possível encontrar os saldos das categorias'});
         }
