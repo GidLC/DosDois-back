@@ -48,9 +48,8 @@ const readReceitaID = (req, res) => {
 
 const editReceita = (req, res) => {
   const casal = req.header('auth');
-  const usuario = req.header('usuario');
-  const {id, descricao, categoria, valor, data, tipo, status, tag, obs, fixa} = req.body
-  ReceitaModel.editReceita(casal, usuario, tipo, id, descricao, categoria, valor, data, status, tag, obs, fixa, (err, results) => {
+  const {id, descricao, categoria, valor, data, tipo, status, tag, obs, fixa, banco} = req.body
+  ReceitaModel.editReceita(casal, tipo, id, descricao, categoria, valor, data, status, tag, obs, fixa, banco, (err, results) => {
     if (err) {
       console.error('Erro ao editar a receita', err);
       return res.status(500).json({ error: 'Erro ao editar a receita' });
@@ -60,12 +59,12 @@ const editReceita = (req, res) => {
   })
 }
 
-const editDespesaFixa = (req, res) => {
+const editReceitaFixa = (req, res) => {
   const casal = req.header('auth');
   const pendentes = req.header('pend');
-  const { id_fixo, descricao, categoria, valor, data, tipo, status, tag, obs } = req.body
+  const { id_fixo, descricao, categoria, valor, data, tipo, tag, obs } = req.body
 
-  ReceitaModel.editReceitaFixa(casal, id_fixo, descricao, categoria, valor, data, tipo, status, pendentes, tag, obs, (err, results) => {
+  ReceitaModel.editReceitaFixa(casal, id_fixo, descricao, categoria, valor, data, tipo, pendentes, tag, obs, (err, results) => {
       if (err) {
           console.error('Erro ao editar a receita', err);
           return res.status(500).json({ error: 'Erro ao editar a receita' });
@@ -96,8 +95,9 @@ const deleteReceita = (req, res) => {
 const efetivaReceita = (req, res) => {
   const casal = req.header('auth');
   const receitaId = req.header('id');
+  const fixa = req.header('fixa');
 
-  ReceitaModel.efetivaReceita(casal, receitaId, (err, results) => {
+  ReceitaModel.efetivaReceita(casal, receitaId, fixa, (err, results) => {
     if (err) {
       console.error('Erro ao efetivar receita', err);
       return res.status(500).json({message: `Não foi possível efetivar a receita: ${err}`});
@@ -108,4 +108,4 @@ const efetivaReceita = (req, res) => {
 }
 
 
-export default { addReceita, readReceita, deleteReceita, readReceitaID, editReceita, efetivaReceita, editDespesaFixa }
+export default { addReceita, readReceita, deleteReceita, readReceitaID, editReceita, efetivaReceita, editReceitaFixa }

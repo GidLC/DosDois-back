@@ -1,4 +1,3 @@
-import { error } from "qrcode-terminal"
 import { pool } from "../../config.mjs"
 
 class TagsModel {
@@ -6,7 +5,7 @@ class TagsModel {
         try {
             const query = 'INSERT INTO tags (nome, casal) VALUES (?,?)'
 
-            pool.query(query,[nome, casal], (err, results) => {
+            pool.query(query, [nome, casal], (err, results) => {
                 if (err) {
                     return callback(err, null)
                 }
@@ -14,7 +13,7 @@ class TagsModel {
                 return callback(null, results)
             })
         } catch (error) {
-         throw error   
+            throw error
         }
     }
 
@@ -45,7 +44,7 @@ class TagsModel {
 
                 return callback(null, results)
             }
-        )
+            )
         } catch (error) {
             throw error
         }
@@ -69,6 +68,7 @@ class TagsModel {
 
     static deleteTag = async (idTag, casal, callback) => {
         try {
+            console.log(idTag, casal)
             const query = `DELETE FROM tags WHERE id = ? AND casal = ?`
 
             pool.query(query, [idTag, casal], (err, results) => {
@@ -80,6 +80,24 @@ class TagsModel {
             })
         } catch (error) {
             throw error
+        }
+    }
+
+    static readTagsByTermo = async (termo, casal, callback) => {
+        try {
+            const query = 'SELECT id, nome FROM tags WHERE nome LIKE ? AND casal = ?'
+            
+            const searchTerm = `%${termo}%`
+            pool.query(query, [searchTerm, casal], (err, results) => {
+                if (err) {
+                    return callback(err, null)
+                }
+
+                return callback(null, results)
+            })
+
+        } catch (error) {
+            return callback(error, null)
         }
     }
 }

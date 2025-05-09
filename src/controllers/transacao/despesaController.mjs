@@ -36,10 +36,15 @@ const readDespesaID = (req, res) => {
     const casal = req.header('auth');
     const fixa = req.header('fixa');
 
-    DespesaModel.readDespesaID(id, casal, fixa, (err, results) => {
+    DespesaModel.readDespesaID(id, casal, Number(fixa), (err, results) => {
         if (err) {
             console.error('Erro ao encontrar despesa:', err);
             return res.status(500).json({ error: 'Erro ao encontrar despesa' });
+        }
+
+        if (results == undefined) {
+            console.error(`Nenhuma despesa encontrada. Há algum erro na requisição`)
+            return res.status(400). json({message: `Nenhuma despesa encontrada. Há algum erro na requisição`})
         }
         res.status(200).json({ message: 'Despesa encontrada com sucesso', results })
     })
@@ -47,9 +52,9 @@ const readDespesaID = (req, res) => {
 
 const editDespesa = (req, res) => {
     const casal = req.header('auth');
-    const { id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs } = req.body
+    const { id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco } = req.body
 
-    DespesaModel.editDespesa(casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, (err, results) => {
+    DespesaModel.editDespesa(casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco, (err, results) => {
         if (err) {
             console.error('Erro ao editar a despesa', err);
             return res.status(500).json({ error: 'Erro ao editar a despesa' });
@@ -62,9 +67,9 @@ const editDespesa = (req, res) => {
 const editDespesaFixa = (req, res) => {
     const casal = req.header('auth');
     const pendentes = req.header('pend');
-    const { id_fixo, descricao, categoria, valor, data, tipo, status, tag, obs } = req.body
+    const { id_fixo, descricao, categoria, valor, data, tipo, tag, obs } = req.body
 
-    DespesaModel.editDespesaFixa(casal, id_fixo, descricao, categoria, valor, data, tipo, status, pendentes, tag, obs, (err, results) => {
+    DespesaModel.editDespesaFixa(casal, id_fixo, descricao, categoria, valor, data, tipo, pendentes, tag, obs, (err, results) => {
         if (err) {
             console.error('Erro ao editar a despesa', err);
             return res.status(500).json({ error: 'Erro ao editar a despesa' });
