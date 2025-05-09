@@ -178,7 +178,7 @@ class DespesaModel {
     }
 
     static deleteDespesa = async (casal, id, id_fixo, pend, callback) => {
-        const tabela = (id_fixo == 'undefined') ? 'despesa' : 'despesas_fixas';
+        const tabela = (!id_fixo || id_fixo == undefined) ? 'despesa' : 'despesas_fixas';
         const params = (pend == 1) ? [id_fixo, casal] : [id, casal]
         const query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND casal = ?`;
 
