@@ -19,8 +19,9 @@ const readReceita = (req, res) => {
   const mes = req.header('mes');
   const ano = req.header('ano');
   const fixa = req.header('fixa')
+  const ajuste = req.header('ajuste')
 
-  ReceitaModel.readReceita(usuario, casal, mes, ano, fixa, (err, results) => {
+  ReceitaModel.readReceita(usuario, casal, mes, ano, fixa, Number(ajuste), (err, results) => {
     if (err) {
       console.error('Erro ao Encontrar as receitas', err);
       return res.status(500).json({ error: `Erro ao buscar receitas. ${err}` });
