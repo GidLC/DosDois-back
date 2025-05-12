@@ -7,7 +7,7 @@ import enviaWhats from '../../data/enviaWhats/enviaWhats.mjs';
 
 class AuthModel {
 
-  static cadastroUsuario = async (nome, email, senha, email_parceiro, fone, dt_criacao, callback) => {
+  static cadastroUsuario = async (nome, email, senha, fone, dt_criacao, sexo, callback) => {
     try {
       //Cria código exclusivo do casal
       const codigoCasal = crypto.randomBytes(3).toString('hex');
@@ -16,27 +16,23 @@ class AuthModel {
       //categorias de despesa padrão: Alimentação, Moradia, transporte, saúde, educação, lazer, roupas e acessórios, água/luz/internet, despesas diversas
       //categorias de receita padrão: Salário, rendimentos, presentes, receitas diversas
 
-      const queryUsuario = 'INSERT INTO usuario (nome, email, senha, email_parceiro, casal, dt_criacao, fone) VALUES (?, ?, ?, ?, ?, ?, ?)';
+      const queryUsuario = 'INSERT INTO usuario (nome, email, senha, casal, dt_criacao, fone, sexo) VALUES (?, ?, ?, ?, NOW(), ?, ?)';
 
       //Cria cadastro do usuário principal
       const usuario = await new Promise((resolve, reject) => {
-        pool.query(queryUsuario, [nome, email, senhaHash, email_parceiro, codigoCasal, dt_criacao, fone], async (err, results) => {
+        pool.query(queryUsuario, [nome, email, senhaHash, codigoCasal, fone, sexo], async (err, results) => {
           if (err) {
-            reject(err)
+            reject(err.errno)
+          } else {
+            await enviaEmail(email,
+              "Cadastro no OneCash",
+              EmailCadastro(nome, codigoCasal)
+            );
+
+            await enviaWhats(fone, `Você acaba de realizar o cadastro no app DosDois, para que seu parceiro se vincule a você ele precisa do código: ${codigoCasal}, `)
+
+            resolve(results)
           }
-
-          await enviaEmail(email,
-            "Cadastro no OneCash",
-            EmailCadastro(nome, codigoCasal)
-          );
-
-          await enviaEmail(email_parceiro,
-            "Cadastro no OneCash",
-            EmailParceiro(nome, codigoCasal))
-
-          await enviaWhats(fone, `Você acaba de realizar o cadastro no app DosDois, para que seu parceiro se vincule a você ele precisa do código: ${codigoCasal}`)
-
-          resolve(results)
         });
       })
 
@@ -84,7 +80,7 @@ class AuthModel {
         });
       }));
 
-      //Cria contas bancárias padrão
+      //Cria conta bancárias padrão Carteira
       const queryBanco = `INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Carteira", 0, 0, ?, ?);`
 
       await new Promise((resolve, reject) => {
@@ -98,18 +94,22 @@ class AuthModel {
 
       return callback(null, "Usuário cadastrado")
     } catch (error) {
-      return callback(`Houve um erro ao cadastrar o usuário. ${error}`, null)
+      return callback({
+        message: `Houve um erro ao cadastrar o usuário`,
+        cod: error
+      }, null)
     }
   }
 
 
+  //Busca cadastro do parceiro para realizar a vinculação
   static buscaCadastro(codigo, callback) {
     const query = 'SELECT user.nome, user.id, casal.usuario_sec FROM usuario AS user INNER JOIN casal ON casal.usuario_princ = user.id WHERE casal = ?';
     pool.query(query, [codigo], (err, results) => {
       if (err) {
         return callback(err, null);
       } else if (results.length === 0) {
-        return callback(null, 0); // Não há usuário cadastrado com esse código de vinculação
+        return callback(null, 0);
       } else if (results[0].usuario_sec != null) {
         return callback(null, 1);
       }
@@ -208,9 +208,6 @@ class AuthModel {
         pool.query(queryCasal, [login[0].id, login[0].id], (err, results) => {
           if (err) {
             reject(err)
-          } else if (results.length == 0) {
-            err = `Você e seu parceiro não formaram um casal em nosso app`;
-            return callback(err, null)
           } else {
             resolve(results)
           }
@@ -229,7 +226,9 @@ class AuthModel {
         })
       })*/
 
+      //Casal formado
       if (casal[0].usuario_sec !== null) {
+        //Login do usuário principal
         if (login[0].id == casal[0].usuario_princ) {
           const id_parceiro = casal[0].usuario_sec
           const queryParceiro = `SELECT * FROM usuario where id = ?`;
@@ -253,8 +252,10 @@ class AuthModel {
             nome_parceiro: parceiro[0].nome,
             email_parceiro: login[0].email_parceiro,
             fone_parceiro: parceiro[0].fone,
+            casal_formado: 1
           })
         } else {
+          //Login do usuário secundário
           const id_parceiro = casal[0].usuario_princ
           const queryParceiro = `SELECT * FROM usuario where id = ?`;
           const parceiro = await new Promise((resolve, reject) => {
@@ -275,14 +276,24 @@ class AuthModel {
             id_parceiro: id_parceiro,
             nome_parceiro: parceiro[0].nome,
             email_parceiro: login[0].email_parceiro,
-            fone_parceiro: parceiro[0].fone
+            fone_parceiro: parceiro[0].fone,
+            casal_formado: 1
           })
         }
+        //Casal ainda não formado
       } else {
-        return callback({ message: "Usuário sem parceiro vinculado a ele" })
+        return callback(null, {
+          id: login[0].id,
+          nome: login[0].nome,
+          email: login[0].email,
+          fone: login[0].fone,
+          cod_casal: casal[0].cod_casal,
+          casal_formado: 0
+        })
       }
     } catch (error) {
-      throw error
+      console.error(`Houve um erro ao realizar o login. ${error}`)
+      return callback(error, null)
     }
   }
 

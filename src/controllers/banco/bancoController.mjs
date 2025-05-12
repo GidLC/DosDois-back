@@ -22,7 +22,7 @@ const readBanco = (req, res) => {
 
     BancoModel.readBanco(cod_casal, usuario, arquivo, (err, results) => {
         if(err) {
-            return res.status(500).json({error: 'Erro ao encontrar bancos'});
+            return res.status(500).json({error: `Erro ao encontrar bancos. ${err}`});
         } else if(results.length == 0) {
             return res.status(500).json({error: 'Não há bancos para serem listados'});
         }
