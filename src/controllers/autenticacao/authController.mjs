@@ -17,10 +17,9 @@ const cadastroUsuario = (req, res) => {
 
   // Chame o método salvarUsuario do modelo
   AuthModel.cadastroUsuario(nome, email, senha, fone, dt_criacao, sexo, (err, resultado) => {
-    console.log(err)
-    if (err.cod == 1062) {
+    /*if (err.cod == 1062) {
       return res.status(400).json({ error: 'Esse e-mail ou celular já está cadastrado' });
-    } else if (err && err.cod != 1062) {
+    } else*/ if (err) {
       console.error('Erro ao salvar o usuário:', err);
       return res.status(500).json({ error: 'Erro ao salvar o usuário' });
     }
@@ -46,10 +45,9 @@ const buscaCadastro = (req, res) => {
 };
 
 const vincCadastro = (req, res) => {
-  console.log(req.body)
-  const { nome, email, senha, cod_casal, email_parceiro, dt_criacao, id_usuario_princ, fone } = req.body;
+  const { nome, email, senha, cod_casal, fone, sexo, uuid } = req.body;
 
-  AuthModel.vincCadastro(nome, email, senha, cod_casal, email_parceiro, dt_criacao, id_usuario_princ, fone, (err, resultado) => {
+  AuthModel.vincCadastro(nome, email, senha, cod_casal, fone, sexo, uuid, (err, resultado) => {
     if (err) {
       console.error('Erro ao vincular usuário :', err);
       return res.status(500).json({ error: err });
@@ -60,7 +58,6 @@ const vincCadastro = (req, res) => {
 
 const buscaCadastroEmail = (req, res) => {
   const email = req.header('email');
-  console.log(email);
 
   AuthModel.buscaCadastroEmail(email, (err, results) => {
     if (err) {
@@ -99,7 +96,6 @@ const mudaSenha = (req, res) => {
 
 const editUser = (req, res) => {
   const { nome, email, fone, id } = req.body
-  console.log(nome, email, fone, id)
 
   AuthModel.editUser(nome, email, fone, id, (err, results) => {
     if (err) {
@@ -110,5 +106,18 @@ const editUser = (req, res) => {
   })
 }
 
-export default { cadastroUsuario, loginUsuario, buscaCadastro, vincCadastro, buscaCadastroEmail, validaToken, mudaSenha, editUser }
+const validaVinculo = (req, res) => {
+  const casal = req.header("casal")
+  const uuid = req.header("uuid")
+
+  AuthModel.validaVinculo(casal, uuid, (err, results) => {
+    if (err) {
+      return res.status(500).json({message: `Não foi possível validar as informações. ${err}`})
+    }
+
+    return res.status(200).json({message: 'OK', results})
+  })
+}
+
+export default { cadastroUsuario, loginUsuario, buscaCadastro, vincCadastro, buscaCadastroEmail, validaToken, mudaSenha, editUser, validaVinculo }
 

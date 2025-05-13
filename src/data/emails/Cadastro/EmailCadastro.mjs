@@ -1,4 +1,4 @@
-const EmailCadastro = (nome, codigoCasal) =>  {return `
+const EmailCadastro = (nome, codigoCasal, url) =>  {return `
 <html lang="pt-br">
 
 <head>
@@ -62,7 +62,7 @@ const EmailCadastro = (nome, codigoCasal) =>  {return `
         <p>Olá, ${nome}</p>
         <p>Você acaba de se cadastrar no OneCash, o melhor aplicativo de finanças familiar. O código casal seu e de
             seu(sua) parceiro(a) é o <b>${codigoCasal}</b>.
-            Seu parceiro(a) vai precisar dele para se vincular a você, mas não se preocupe já enviamos pra ele(a) também
+            Para se vincular basta seu parceiro acessar o link: ${url}
         </p>
         <p>Se você não solicitou este cadastro, por favor, ignore este e-mail.</p>
     </main>

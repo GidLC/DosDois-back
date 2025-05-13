@@ -23,16 +23,9 @@ class AuthModel {
         pool.query(queryUsuario, [nome, email, senhaHash, codigoCasal, fone, sexo], async (err, results) => {
           if (err) {
             reject(err.errno)
-          } else {
-            await enviaEmail(email,
-              "Cadastro no OneCash",
-              EmailCadastro(nome, codigoCasal)
-            );
-
-            await enviaWhats(fone, `Você acaba de realizar o cadastro no app DosDois, para que seu parceiro se vincule a você ele precisa do código: ${codigoCasal}, `)
-
-            resolve(results)
           }
+
+          resolve(results)
         });
       })
 
@@ -92,18 +85,41 @@ class AuthModel {
         });
       });
 
+      const uuid = crypto.randomUUID();
+      const url = `https://dosdoisapp.com.br/atribuicao/${codigoCasal}/${uuid}`
+
+      //Adiciona dados para validação da vinculação
+      const queryValidacao = `INSERT INTO vinculos (casal, uuid) VALUES (?, ?)`
+
+      await new Promise((resolve, reject) => {
+        pool.query(queryValidacao, [codigoCasal, uuid], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(results);
+        })
+      })
+
+      await enviaEmail(email,
+        "Cadastro no OneCash",
+        EmailCadastro(nome, codigoCasal, url)
+      );
+
+      await enviaWhats(fone, `Bem vindo ao app *DosDois*, para que seu parceiro se vincule a você ele precisa acessar a seguinte URL:`)
+      await enviaWhats(fone, url)
+
       return callback(null, "Usuário cadastrado")
     } catch (error) {
       return callback({
-        message: `Houve um erro ao cadastrar o usuário`,
-        cod: error
+        message: `Houve um erro ao cadastrar o usuário. ${error}`,
+        error
       }, null)
     }
   }
 
 
-  //Busca cadastro do parceiro para realizar a vinculação
-  static buscaCadastro(codigo, callback) {
+  //Busca cadastro do parceiro para realizar a vinculação (ANTIGO)
+  /*static buscaCadastro(codigo, callback) {
     const query = 'SELECT user.nome, user.id, casal.usuario_sec FROM usuario AS user INNER JOIN casal ON casal.usuario_princ = user.id WHERE casal = ?';
     pool.query(query, [codigo], (err, results) => {
       if (err) {
@@ -115,53 +131,63 @@ class AuthModel {
       }
       callback(null, results[0]);
     });
-  }
+  }*/
 
   //Realizar uma validação de vinculação mais segura, como solicitar o email do parceiro principal
-  static vincCadastro = async (nome, email, senha, cod_casal, email_parceiro, dt_criacao, id_usuario_princ, fone, callback) => {
-    const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
-    //verificar se o email a ser vinculado é o mesmo que está cadastrado no usuário principal
-    const queryParceiro = 'SELECT * FROM usuario WHERE email_parceiro = ?'
-    const parceiro = await new Promise((resolve, reject) => {
-      pool.query(queryParceiro, [email], (err, results) => {
-        if (err) {
-          reject(err)
-        } else if (results.length == 0) {
-          err = `Confirme com seu parceiro se ele colocou esse como seu e-mail`
-          return callback(err, null)
-        } else {
-          resolve(results)
-        }
-      })
-    })
-
-    //Insere usuário na tabela
-    const queryUsuario = 'INSERT INTO usuario (nome, email, senha, casal, email_parceiro, dt_criacao, fone) VALUES (?, ?, ?, ?, ?, ?, ?)';
-    const usuarioResult = await new Promise((resolve, reject) => {
-      pool.query(queryUsuario, [nome, email, senhaHash, cod_casal, email_parceiro, dt_criacao, fone], (err, results) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(results);
-      });
-    });
-
-    const userId = usuarioResult.insertId;
-
-    //Cria linha na tabela de casal
-    const queryCasal = 'UPDATE casal SET usuario_sec = ? WHERE cod_casal = ?';
-    const casalResult = await new Promise((resolve, reject) => {
-      pool.query(queryCasal, [userId, cod_casal], (err, results) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(results);
-      });
-    });
-
-    const queryBancos = `INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Carteira", 0, 0, ?, ?);`
-
+  static vincCadastro = async (nome, email, senha, cod_casal, fone, sexo, uuid, callback) => {
+    console.log({nome, email, senha, cod_casal, fone, sexo, uuid})
     try {
+      const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
+
+      //Insere usuário na tabela
+      const queryUsuario = `INSERT INTO usuario (nome, email, senha, casal, dt_criacao, fone, sexo) 
+                            VALUES (?, ?, ?, ?, NOW(), ?, ?)`;
+      const usuarioResult = await new Promise((resolve, reject) => {
+        pool.query(queryUsuario, [nome, email, senhaHash, cod_casal, fone, sexo], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(results);
+        });
+      });
+
+      const userId = usuarioResult.insertId;
+
+      //Cria linha na tabela de casal
+      const queryCasal = 'UPDATE casal SET usuario_sec = ? WHERE cod_casal = ?';
+      const casalResult = await new Promise((resolve, reject) => {
+        pool.query(queryCasal, [userId, cod_casal], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(results);
+        });
+      });
+
+      const queryParceiro = `SELECT nome FROM usuario 
+                              WHERE casal = ?`
+      const parceiro = await new Promise((resolve, reject) => {
+        pool.query(queryParceiro, [cod_casal], (err, results) => {
+          if (err) {
+            reject(err)
+          }
+          resolve(results[0])
+        })
+      })
+
+      const queryVinculo = `UPDATE vinculos SET ativo = 0 WHERE casal = ? AND uuid = ?`
+
+      await new Promise((resolve, reject) => {
+        pool.query(queryVinculo, [cod_casal, uuid], (err, results) => {
+          if (err) {
+            reject(err)
+          }
+          resolve(results)
+        })
+      })
+
+      const queryBancos = `INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Carteira", 0, 0, ?, ?);`
+
       const queries = queryBancos.split(';').filter(query => query.trim() !== '');
       await Promise.all(queries.map((query) => {
         return new Promise((resolve, reject) => {
@@ -173,12 +199,13 @@ class AuthModel {
           });
         });
       }));
-    } catch (error) {
-      console.error("Erro ao inserir Banco:", error);
-    }
 
-    enviaWhats(fone, `Você acaba de se vincular como parceira de ${parceiro.nome} no aplicativo OneCash. Aproveitem a aplicação e sucesso`)
-    return callback(null, casalResult);
+      enviaWhats(fone, `Você acaba de se vincular como parceira(o) de ${parceiro.nome} no aplicativo DosDois. Aproveitem a aplicação e sucesso`)
+      return callback(null, casalResult);
+    } catch (error) {
+      console.error(`Não foi possível vincular o cadastro. ${error}`)
+      return callback(error, null)
+    }
   }
 
   static loginUsuario = async (email, senha, callback) => {
@@ -297,6 +324,7 @@ class AuthModel {
     }
   }
 
+  //Usado para trocar a senha no APP
   static buscaCadastroEmail = async (email, callback) => {
     const token = crypto.randomBytes(2).toString('hex');
     const data = new Date()
@@ -336,6 +364,7 @@ class AuthModel {
     return callback(null, "Token Gerado")
   };
 
+  //Serve para trocar a senha
   static validaToken = (token, callback) => {
     const data = new Date();
     const query = 'SELECT * FROM senha_temp WHERE token = ?';
@@ -374,6 +403,50 @@ class AuthModel {
 
       return callback(null, results)
     })
+  }
+
+  static validaVinculo = async (casal, uuid, callback) => {
+    try {
+      const queryValida = `SELECT v.ativo FROM vinculos AS v
+                              WHERE v.casal = ? AND v.uuid = ? AND v.ativo = 1`
+
+      const valido = await new Promise((resolve, reject) => {
+        pool.query(queryValida, [casal, uuid], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(results);
+        })
+      })
+
+      if (valido.length != 0) {
+        const queryParceiro = `SELECT nome FROM usuario 
+                              WHERE casal = ?`
+        const parceiro = await new Promise((resolve, reject) => {
+          pool.query(queryParceiro, [casal], (err, results) => {
+            if (err) {
+              reject(err)
+            }
+            resolve(results[0])
+          })
+        })
+
+        return callback(null, {
+          ativo: true,
+          parceiro: parceiro.nome
+        })
+      } else {
+        return callback(null, {
+          ativo: false,
+          parceiro: null
+        })
+      }
+
+
+    } catch (error) {
+      console.log(`Não foi possível validar as informações. ${error}`)
+      return callback(error, null)
+    }
   }
 
 }

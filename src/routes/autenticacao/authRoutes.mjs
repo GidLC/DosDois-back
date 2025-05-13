@@ -10,5 +10,6 @@ authRouter.get('/buscaCadEmail', authController.buscaCadastroEmail)
 authRouter.put('/mudaSenha', authController.mudaSenha)
 authRouter.get('/validaToken', authController.validaToken)
 authRouter.put('/editCadastro', authController.editUser)
+authRouter.get('/validaVinculo', authController.validaVinculo)
 
 export default authRouter;
