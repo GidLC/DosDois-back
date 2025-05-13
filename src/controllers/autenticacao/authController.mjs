@@ -19,7 +19,7 @@ const cadastroUsuario = (req, res) => {
   AuthModel.cadastroUsuario(nome, email, senha, fone, dt_criacao, sexo, (err, resultado) => {
     console.log(err)
     if (err.cod == 1062) {
-      return res.status(400).json({ error: 'Esse e-mail já está cadastrado' });
+      return res.status(400).json({ error: 'Esse e-mail ou celular já está cadastrado' });
     } else if (err && err.cod != 1062) {
       console.error('Erro ao salvar o usuário:', err);
       return res.status(500).json({ error: 'Erro ao salvar o usuário' });
