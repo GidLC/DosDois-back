@@ -178,7 +178,7 @@ class SaldosModel {
         }
     }
 
-    static saldoPorPeriodo = async (casal, usuario, parceiro, ano, callback) => {
+    static saldoPorPeriodo = async (casal, usuario, ano, callback) => {
         try {
             //Função para buscar saldos em um determinado periodo
             const getSaldos = async (queryBanco, paramsBanco) => {
