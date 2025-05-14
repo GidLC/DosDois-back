@@ -105,8 +105,7 @@ class AuthModel {
         EmailCadastro(nome, codigoCasal, url)
       );
 
-      await enviaWhats(fone, `Bem vindo ao app *DosDois*, para que seu parceiro se vincule a você ele precisa acessar a seguinte URL:`)
-      await enviaWhats(fone, url)
+      await enviaWhats(fone, `Bem vindo ao app *DosDois*, para que seu parceiro se vincule a você ele precisa acessar a seguinte URL: ${url}`)
 
       return callback(null, "Usuário cadastrado")
     } catch (error) {
@@ -135,7 +134,6 @@ class AuthModel {
 
   //Realizar uma validação de vinculação mais segura, como solicitar o email do parceiro principal
   static vincCadastro = async (nome, email, senha, cod_casal, fone, sexo, uuid, callback) => {
-    console.log({nome, email, senha, cod_casal, fone, sexo, uuid})
     try {
       const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
 
@@ -406,6 +404,7 @@ class AuthModel {
   }
 
   static validaVinculo = async (casal, uuid, callback) => {
+    console.log({casal, uuid})
     try {
       const queryValida = `SELECT v.ativo FROM vinculos AS v
                               WHERE v.casal = ? AND v.uuid = ? AND v.ativo = 1`
