@@ -1,18 +1,16 @@
-const SeparaData = async (data) => {
-    const [dataPart, horaPart] = data.split("T");
-    const [ano, mes, dia] = dataPart.split("-");
-    const [hora, minuto, segundo] = horaPart.split(":");
+import { DateTime } from 'luxon'
 
-    const objData = {
-        ano: parseInt(ano),
-        mes: parseInt(mes -1),
-        dia: parseInt(dia),
-        hora: parseInt(hora),
-        minuto: parseInt(minuto),
-        segundo: parseInt(segundo)
+const separaData = async (data) => {
+    const dateBRT = DateTime.fromISO(data, { zone: 'utc' }).setZone('America/Sao_Paulo')
+
+    return {
+        ano: dateBRT.year,
+        mes: dateBRT.month, // Ajuste para índice zero
+        dia: dateBRT.day,
+        hora: dateBRT.hour,
+        minuto: dateBRT.minute,
+        segundo: dateBRT.second
     }
-
-    return objData
 }
 
-export default  SeparaData 
+export default separaData

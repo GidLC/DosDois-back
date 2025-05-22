@@ -4,6 +4,7 @@ import enviaEmail from "../../data/enviaEmail/enviaEmail.mjs";
 import EmailParceiro from "../../data/emails/Cadastro/EmailParceiro.mjs";
 import EmailCadastro from "../../data/emails/Cadastro/EmailCadastro.mjs";
 import enviaWhats from '../../data/enviaWhats/enviaWhats.mjs';
+import separaData from '../../data/SeparaData/SeparaData.mjs';
 
 class AuthModel {
 
@@ -323,72 +324,97 @@ class AuthModel {
   }
 
   //Usado para trocar a senha no APP
-  static buscaCadastroEmail = async (email, callback) => {
-    const token = crypto.randomBytes(2).toString('hex');
-    const data = new Date()
-    const validade = new Date(data.getTime() + 2 * 60 * 60 * 1000).toISOString();
-    console.log(validade)
+  static buscaCadastroEmail = async (fone, callback) => {
+    try {
+      const token = crypto.randomBytes(2).toString('hex');
+      const uuid = crypto.randomUUID();
+      const data = new Date()
+      const validade = new Date(data.getTime() + 2 * 60 * 60 * 1000).toISOString();
+      const v = await separaData(validade)
+      const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
 
-    const queryUsuario = `SELECT * FROM usuario WHERE email = ?`;
-    const buscaUsuario = await new Promise((resolve, reject) => {
-      pool.query(queryUsuario, [email], (err, results) => {
-        if (err) {
-          reject(err);
-        } else if (results.length == 0) {
+      const queryUsuario = `SELECT * FROM usuario WHERE fone = ?`;
+      const buscaUsuario = await new Promise((resolve, reject) => {
+        pool.query(queryUsuario, [fone], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+          resolve(results)
+        });
+      });
+
+      if (!buscaUsuario[0]) {
+        return callback("Usuário não encontrado", null);
+      }
+
+      const userId = buscaUsuario[0].id
+      const queryToken = "INSERT INTO senha_temp (id_usuario, token, validade, uuid) VALUES (?,?,?,?)";
+      await new Promise((resolve, reject) => {
+        pool.query(queryToken, [userId, token, momento, uuid], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+
           resolve(results);
-        }
-        resolve(results)
+        });
       });
-    });
 
-    if (!buscaUsuario[0]) {
-      return callback("Usuário não encontrado", null);
+      const url = `localhost:5173/esq-senha/${token}/${uuid}`
+
+      enviaWhats(buscaUsuario[0].fone, `Você acaba de solicitar a mudança de senha no aplicativo OneCash. Para realizar a alteração basta acessar o link: ${url}`)
+      return callback(null, "Token Gerado")
+    } catch (error) {
+      console.error(`Houve um erro ao buscar cadastro. ${error}`)
+      return callback(error, null)
     }
-
-    const userId = buscaUsuario[0].id
-    const queryToken = "INSERT INTO senha_temp (id_usuario, token, validade) VALUES (?,?,?)";
-    await new Promise((resolve, reject) => {
-      pool.query(queryToken, [userId, token, validade], (err, results) => {
-        if (err) {
-          reject(err);
-        }
-
-        resolve(results);
-      });
-    });
-
-    enviaEmail(email, "Mudança de senha no OneCash", `Para realizar a mudança de sua senha digite o código ${token}`);
-    enviaWhats(buscaUsuario[0].fone, `Você acaba de solicitar a mudança de senha no aplicativo OneCash. Seu código de alteração é o: ${token}`)
-    return callback(null, "Token Gerado")
   };
 
   //Serve para trocar a senha
-  static validaToken = (token, callback) => {
+  static validaToken = (token, uuid, callback) => {
     const data = new Date();
-    const query = 'SELECT * FROM senha_temp WHERE token = ?';
+    const query = 'SELECT * FROM senha_temp WHERE token = ? AND uuid = ?';
 
-    pool.query(query, [token], (err, results) => {
+    pool.query(query, [token, uuid], (err, results) => {
       if (err || results.length == 0) {
         return callback(err, null)
       } else if (data >= results[0].validade) {
-        console.log(`Token vencido`)
-        return callback("Token Vencido", null)
+        return callback("Token inválido", null)
       } else {
         return callback(null, results[0])
       }
     });
   }
 
-  static mudaSenha = (id, novaSenha, callback) => {
-    const senhaHash = crypto.createHash('sha256').update(novaSenha).digest('hex');
-    const query = 'UPDATE usuario SET senha = ? WHERE id = ?';
-    pool.query(query, [senhaHash, id], (err, results) => {
-      if (err) {
-        return callback(err, null);
-      }
+  static mudaSenha = async (id, novaSenha, token, callback) => {
+    try {
+      const senhaHash = crypto.createHash('sha256').update(novaSenha).digest('hex');
 
-      return callback(null, results)
-    })
+      const querySenha = 'UPDATE usuario SET senha = ? WHERE id = ?';
+      await new Promise((resolve, reject) => {
+        pool.query(querySenha, [senhaHash, id], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+
+          resolve(results)
+        })
+      })
+
+      const queryTemp = `UPDATE senha_temp SET validade = NOW() WHERE token = ?`
+      await new Promise((resolve, reject) => {
+        pool.query(queryTemp, [token], (err, results) => {
+          if (err) {
+            reject(err);
+          }
+
+          resolve(results)
+        })
+      })
+
+      return callback(null, "OK")
+    } catch (error) {
+      return callback(error, null)
+    }
   }
 
   static editUser = (nome, email, fone, id, callback) => {
@@ -404,7 +430,7 @@ class AuthModel {
   }
 
   static validaVinculo = async (casal, uuid, callback) => {
-    console.log({casal, uuid})
+    console.log({ casal, uuid })
     try {
       const queryValida = `SELECT v.ativo FROM vinculos AS v
                               WHERE v.casal = ? AND v.uuid = ? AND v.ativo = 1`
