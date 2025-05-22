@@ -359,7 +359,7 @@ class AuthModel {
         });
       });
 
-      const url = `localhost:5173/esq-senha/${token}/${uuid}`
+      const url = `https://dosdoisapp.com.br/esq-senha/${token}/${uuid}`
 
       enviaWhats(buscaUsuario[0].fone, `Você acaba de solicitar a mudança de senha no aplicativo OneCash. Para realizar a alteração basta acessar o link: ${url}`)
       return callback(null, "Token Gerado")
