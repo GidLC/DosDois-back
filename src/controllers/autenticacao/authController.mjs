@@ -57,9 +57,9 @@ const vincCadastro = (req, res) => {
 };
 
 const buscaCadastroEmail = (req, res) => {
-  const email = req.header('email');
+  const fone = req.header('fone');
 
-  AuthModel.buscaCadastroEmail(email, (err, results) => {
+  AuthModel.buscaCadastroEmail(fone, (err, results) => {
     if (err) {
       console.error('Erro ao encontrar cadastro');
       return res.status(500).json({ error: 'Erro ao encontrar cadastro' });
@@ -72,8 +72,9 @@ const buscaCadastroEmail = (req, res) => {
 
 const validaToken = (req, res) => {
   const token = req.header('token');
+  const uuid = req.header('uuid');
 
-  AuthModel.validaToken(token, (err, results) => {
+  AuthModel.validaToken(token, uuid, (err, results) => {
     if (err || results == null) {
       return res.status(500).json({ error: 'Token inválido' });
     }
@@ -82,10 +83,9 @@ const validaToken = (req, res) => {
 };
 
 const mudaSenha = (req, res) => {
-  const { id, novaSenha } = req.body;
-  console.log(`id: ${id}, nova senha: ${novaSenha}`)
+  const { id, novaSenha, token } = req.body;
 
-  AuthModel.mudaSenha(id, novaSenha, (err, results) => {
+  AuthModel.mudaSenha(id, novaSenha, token, (err, results) => {
     if (err) {
       return res.status(500).json({ error: 'Erro ao mudar a senha' });
     }
