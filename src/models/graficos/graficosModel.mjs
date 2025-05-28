@@ -87,8 +87,9 @@ class graficosModel {
         }));
 
         const categoriasComSaldo = saldos.filter(saldo => saldo.saldoPorCategoria > 0)
+        const categoriasDecres = categoriasComSaldo.sort((a, b) => b.saldoPorCategoria - a.saldoPorCategoria)
 
-        return callback(null, categoriasComSaldo)
+        return callback(null, categoriasDecres)
     }
 }
 
