@@ -370,14 +370,17 @@ class AuthModel {
   };
 
   //Serve para trocar a senha
-  static validaToken = (token, uuid, callback) => {
+  static validaToken = async (token, uuid, callback) => {
     const data = new Date();
+    const v = await separaData(data)
+    const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
+      
     const query = 'SELECT * FROM senha_temp WHERE token = ? AND uuid = ?';
 
     pool.query(query, [token, uuid], (err, results) => {
       if (err || results.length == 0) {
         return callback(err, null)
-      } else if (data >= results[0].validade) {
+      } else if (momento >= results[0].validade) {
         return callback("Token inválido", null)
       } else {
         return callback(null, results[0])
@@ -400,7 +403,7 @@ class AuthModel {
         })
       })
 
-      const queryTemp = `UPDATE senha_temp SET validade = NOW() WHERE token = ?`
+      const queryTemp = `UPDATE senha_temp SET validade = NOW() WHERE token = ? `
       await new Promise((resolve, reject) => {
         pool.query(queryTemp, [token], (err, results) => {
           if (err) {
@@ -446,7 +449,7 @@ class AuthModel {
 
       if (valido.length != 0) {
         const queryParceiro = `SELECT nome FROM usuario 
-                              WHERE casal = ?`
+                              WHERE casal = ? `
         const parceiro = await new Promise((resolve, reject) => {
           pool.query(queryParceiro, [casal], (err, results) => {
             if (err) {
@@ -469,7 +472,7 @@ class AuthModel {
 
 
     } catch (error) {
-      console.log(`Não foi possível validar as informações. ${error}`)
+      console.log(`Não foi possível validar as informações.${ error } `)
       return callback(error, null)
     }
   }
