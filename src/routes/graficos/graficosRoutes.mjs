@@ -4,5 +4,6 @@ import graficosControllers from '../../controllers/graficos/graficosControllers.
 
 graficosRouter.get('/receitaPorCategoria', graficosControllers.receitaPorCategoria)
 graficosRouter.get('/despesaPorCategoria', graficosControllers.despesaPorCategoria)
+graficosRouter.get('/despesaPorTag', graficosControllers.despesaPorTag)
 
 export default graficosRouter

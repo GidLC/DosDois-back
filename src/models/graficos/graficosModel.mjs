@@ -82,7 +82,7 @@ class graficosModel {
                 const saldoPCatParcNormal = await calculaSaldo(0, 1)
                 const saldoPCatParcFixa = await calculaSaldo(1, 1)
 
-                return { ...categoria, saldoPorCategoria: saldoPCatUserNormal + saldoPCatUserFixa + saldoPCatParcNormal + saldoPCatParcFixa}
+                return { ...categoria, saldoPorCategoria: saldoPCatUserNormal + saldoPCatUserFixa + saldoPCatParcNormal + saldoPCatParcFixa }
             }
         }));
 
@@ -90,6 +90,59 @@ class graficosModel {
         const categoriasDecres = categoriasComSaldo.sort((a, b) => b.saldoPorCategoria - a.saldoPorCategoria)
 
         return callback(null, categoriasDecres)
+    }
+
+    static despesaPorTag = async (casal, usuario, mes, ano, parceiro, callback) => {
+        try {
+            //Selecionar todas as tags 
+            const queryTags = `SELECT id, nome FROM tags WHERE casal = ?`
+
+            const tagsBD = await new Promise((resolve, reject) => {
+                pool.query(queryTags, [casal], (err, results) => {
+                    if (err) {
+                        reject(err)
+                    }
+                    resolve(results)
+                })
+            })
+
+            //Calcular o saldo de cada uma das tags
+            const saldos = await Promise.all(tagsBD.map(async (tag) => {
+                //saldo de despesas normais
+
+                const calculaSaldo = async (fixa, cadParceiro) => {
+                    const table = (fixa == 1) ? "despesas_fixas" : "despesa"
+                    const idUsuario = (cadParceiro == 1) ? parceiro : usuario
+
+                    const saldoPorTagBD = await new Promise((resolve, reject) => {
+                        const querySaldoPorTag = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE tag = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ?`
+                        pool.query(querySaldoPorTag, [tag.id, casal, idUsuario, mes, ano], (err, results) => {
+                            if (err) {
+                                reject(err);
+                            }
+                            resolve(results);
+                        });
+                    });
+
+                    return saldoPorTagBD[0].total_despesas || 0
+                }
+
+                const saldoPCatUserNormal = await calculaSaldo(0, 0)
+                const saldoPCatUserFixa = await calculaSaldo(1, 0)
+                const saldoPCatParcNormal = await calculaSaldo(0, 1)
+                const saldoPCatParcFixa = await calculaSaldo(1, 1)
+
+                return { ...tag, saldoPorTag: saldoPCatUserNormal + saldoPCatUserFixa + saldoPCatParcNormal + saldoPCatParcFixa }
+            }));
+
+            const tagsComSaldo = saldos.filter(saldo => saldo.saldoPorTag > 0)
+            const tagsDecres = tagsComSaldo.sort((a, b) => b.saldoPorTag - a.saldoPorTag)
+
+            return callback(null, tagsDecres)
+        } catch (error) {
+            console.log(err)
+            return callback(error, null)
+        }
     }
 }
 
