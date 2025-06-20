@@ -5,6 +5,7 @@ import EmailParceiro from "../../data/emails/Cadastro/EmailParceiro.mjs";
 import EmailCadastro from "../../data/emails/Cadastro/EmailCadastro.mjs";
 import enviaWhats from '../../data/enviaWhats/enviaWhats.mjs';
 import separaData from '../../data/SeparaData/SeparaData.mjs';
+import { createToken } from '../../appDosDois.mjs';
 
 class AuthModel {
 
@@ -268,7 +269,7 @@ class AuthModel {
             })
           });
 
-          return callback(null, {
+          const token = createToken({
             id: login[0].id,
             nome: login[0].nome,
             email: login[0].email,
@@ -280,6 +281,7 @@ class AuthModel {
             fone_parceiro: parceiro[0].fone,
             casal_formado: 1
           })
+          return callback(null, token)
         } else {
           //Login do usuário secundário
           const id_parceiro = casal[0].usuario_princ
@@ -293,7 +295,8 @@ class AuthModel {
               }
             })
           });
-          return callback(null, {
+
+          const token = createToken({
             id: login[0].id,
             nome: login[0].nome,
             email: login[0].email,
@@ -305,10 +308,11 @@ class AuthModel {
             fone_parceiro: parceiro[0].fone,
             casal_formado: 1
           })
+          return callback(null, token)
         }
         //Casal ainda não formado
       } else {
-        return callback(null, {
+        const token = createToken({
           id: login[0].id,
           nome: login[0].nome,
           email: login[0].email,
@@ -316,6 +320,7 @@ class AuthModel {
           cod_casal: casal[0].cod_casal,
           casal_formado: 0
         })
+        return callback(null, token)
       }
     } catch (error) {
       console.error(`Houve um erro ao realizar o login. ${error}`)
@@ -374,7 +379,7 @@ class AuthModel {
     const data = new Date();
     const v = await separaData(data)
     const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
-      
+
     const query = 'SELECT * FROM senha_temp WHERE token = ? AND uuid = ?';
 
     pool.query(query, [token, uuid], (err, results) => {
@@ -472,7 +477,7 @@ class AuthModel {
 
 
     } catch (error) {
-      console.log(`Não foi possível validar as informações.${ error } `)
+      console.log(`Não foi possível validar as informações.${error} `)
       return callback(error, null)
     }
   }

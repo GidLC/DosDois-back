@@ -1,6 +1,8 @@
+import { autenticarJWT } from "../../appDosDois.mjs";
 import AuthModel from "../../models/autenticacao/authModel.mjs";
 
 
+//Sem autenticação
 const loginUsuario = (req, res) => {
   const { email, senha } = req.body;
   AuthModel.loginUsuario(email, senha, (err, resultado) => {
@@ -12,6 +14,8 @@ const loginUsuario = (req, res) => {
   });
 };
 
+
+//Sem autenticação
 const cadastroUsuario = (req, res) => {
   const { nome, email, senha, fone, dt_criacao, sexo } = req.body;
 
@@ -28,7 +32,8 @@ const cadastroUsuario = (req, res) => {
   });
 };
 
-const buscaCadastro = (req, res) => {
+
+/*const buscaCadastro = (req, res) => {
   const { codigo } = req.body;
   AuthModel.buscaCadastro(codigo, (err, results) => {
     if (err) {
@@ -42,8 +47,9 @@ const buscaCadastro = (req, res) => {
     }
     res.status(200).json(results);
   });
-};
+};*/
 
+//Sem autenticação
 const vincCadastro = (req, res) => {
   const { nome, email, senha, cod_casal, fone, sexo, uuid } = req.body;
 
@@ -56,6 +62,7 @@ const vincCadastro = (req, res) => {
   });
 };
 
+//Sem autenticação
 const buscaCadastroEmail = (req, res) => {
   const fone = req.header('fone');
 
@@ -70,6 +77,7 @@ const buscaCadastroEmail = (req, res) => {
   })
 }
 
+//Sem autenticação
 const validaToken = (req, res) => {
   const token = req.header('token');
   const uuid = req.header('uuid');
@@ -82,6 +90,7 @@ const validaToken = (req, res) => {
   });
 };
 
+//Sem autenticação
 const mudaSenha = (req, res) => {
   const { id, novaSenha, token } = req.body;
 
@@ -94,6 +103,7 @@ const mudaSenha = (req, res) => {
   })
 }
 
+//Autenticação JWT
 const editUser = (req, res) => {
   const { nome, email, fone, id } = req.body
 
@@ -106,6 +116,7 @@ const editUser = (req, res) => {
   })
 }
 
+//Sem autenticação
 const validaVinculo = (req, res) => {
   const casal = req.header("casal")
   const uuid = req.header("uuid")
@@ -119,5 +130,5 @@ const validaVinculo = (req, res) => {
   })
 }
 
-export default { cadastroUsuario, loginUsuario, buscaCadastro, vincCadastro, buscaCadastroEmail, validaToken, mudaSenha, editUser, validaVinculo }
+export default { cadastroUsuario, loginUsuario, vincCadastro, buscaCadastroEmail, validaToken, mudaSenha, editUser, validaVinculo }
 

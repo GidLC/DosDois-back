@@ -1,6 +1,9 @@
 import express from 'express';
 const CategoriaTrRouter = express.Router();
 import CategoriaTrController from '../../controllers/categoria/CategoriaTrController.mjs';
+import { autenticarJWT } from '../../appDosDois.mjs';
+
+CategoriaTrRouter.use(autenticarJWT)
 
 CategoriaTrRouter.post('/addCategoriaTr', CategoriaTrController.addCategoriaTr)
 CategoriaTrRouter.get('/loadCategoriaTr', CategoriaTrController.loadCategoriaTr)
