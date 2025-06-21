@@ -1,7 +1,7 @@
 import express from 'express';
 const bancoRouter = express.Router();
 import bancoController from '../../controllers/banco/bancoController.mjs';
-import { autenticarJWT } from '../../appDosDois.mjs';
+import { autenticarJWT } from '../../middlewares/auth.mjs';
 
 bancoRouter.use(autenticarJWT);
 

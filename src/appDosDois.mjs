@@ -1,4 +1,3 @@
-import jwt from 'jsonwebtoken';
 import { app } from './config.mjs';
 import authRouter from './routes/autenticacao/authRoutes.mjs';
 import bancoRouter from './routes/banco/bancoRoutes.mjs';
@@ -13,7 +12,6 @@ import saldosRouter from './routes/saldos/saldosRoutes.mjs';
 import transfRouter from './routes/transacao/transferenciaRoutes.mjs';
 import objetivoRouter from './routes/objetivos/objetivosRoutes.mjs';
 import tagsRouter from './routes/tags/tagsRoutes.mjs';
-import { JWT_EXPIRES, JWT_SECRET } from './data/apiConfig.mjs';
 
 app.use('/apiDDv1/auth', authRouter);
 app.use('/apiDDv1/receita', receitaRouter);
@@ -34,26 +32,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor Node.js em execução na porta ${PORT}`);
 });
-
-export const createToken = (payload) => {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES
-  })
-}
-
-export const autenticarJWT = (req, res, next) => {
-  const authHeader = req.headers.authorization
-
-  if(!authHeader) return res.sendStatus(401)
-
-  const token = authHeader.split(' ')[1]
-
-  jwt.verify(token, JWT_SECRET, (err, usuario) => {
-    if (err) return res.sendStatus(403)
-
-    req.usuario = usuario;
-    next();
-  });
-}
 
 export default PORT;

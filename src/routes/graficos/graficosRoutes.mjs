@@ -1,7 +1,7 @@
 import express from 'express'
 const graficosRouter = express.Router()
 import graficosControllers from '../../controllers/graficos/graficosControllers.mjs'
-import { autenticarJWT } from '../../appDosDois.mjs'
+import { autenticarJWT } from '../../middlewares/auth.mjs';
 
 graficosRouter.use(autenticarJWT)
 

@@ -5,7 +5,7 @@ import EmailParceiro from "../../data/emails/Cadastro/EmailParceiro.mjs";
 import EmailCadastro from "../../data/emails/Cadastro/EmailCadastro.mjs";
 import enviaWhats from '../../data/enviaWhats/enviaWhats.mjs';
 import separaData from '../../data/SeparaData/SeparaData.mjs';
-import { createToken } from '../../appDosDois.mjs';
+import { createToken } from '../../middlewares/auth.mjs';
 
 class AuthModel {
 
@@ -269,7 +269,7 @@ class AuthModel {
             })
           });
 
-          const token = createToken({
+          const user = {
             id: login[0].id,
             nome: login[0].nome,
             email: login[0].email,
@@ -280,8 +280,13 @@ class AuthModel {
             email_parceiro: login[0].email_parceiro,
             fone_parceiro: parceiro[0].fone,
             casal_formado: 1
+          }
+
+          const token = createToken(user)
+          return callback(null, {
+            token,
+            userData: user
           })
-          return callback(null, token)
         } else {
           //Login do usuário secundário
           const id_parceiro = casal[0].usuario_princ
@@ -296,7 +301,7 @@ class AuthModel {
             })
           });
 
-          const token = createToken({
+          const user = {
             id: login[0].id,
             nome: login[0].nome,
             email: login[0].email,
@@ -307,20 +312,30 @@ class AuthModel {
             email_parceiro: login[0].email_parceiro,
             fone_parceiro: parceiro[0].fone,
             casal_formado: 1
+          }
+
+          const token = createToken(user)
+          return callback(null, {
+            token,
+            userData: user
           })
-          return callback(null, token)
         }
         //Casal ainda não formado
       } else {
-        const token = createToken({
+        const user = {
           id: login[0].id,
           nome: login[0].nome,
           email: login[0].email,
           fone: login[0].fone,
           cod_casal: casal[0].cod_casal,
           casal_formado: 0
+        }
+
+        const token = createToken(user)
+        return callback(null, {
+          token,
+          userData: user
         })
-        return callback(null, token)
       }
     } catch (error) {
       console.error(`Houve um erro ao realizar o login. ${error}`)

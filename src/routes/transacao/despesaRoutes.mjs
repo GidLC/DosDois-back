@@ -1,7 +1,7 @@
 import express from 'express';
 const despesaRouter = express.Router();
 import despesaController from '../../controllers/transacao/despesaController.mjs';
-import { autenticarJWT } from '../../appDosDois.mjs';
+import { autenticarJWT } from '../../middlewares/auth.mjs';
 
 despesaRouter.use(autenticarJWT)
 

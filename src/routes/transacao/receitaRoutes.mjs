@@ -1,7 +1,7 @@
 import express from 'express';
 const receitaRouter = express.Router();
 import receitaController from '../../controllers/transacao/receitaController.mjs'
-import { autenticarJWT } from '../../appDosDois.mjs';
+import { autenticarJWT } from '../../middlewares/auth.mjs';
 
 receitaRouter.use(autenticarJWT)
 

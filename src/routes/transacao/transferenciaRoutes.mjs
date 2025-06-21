@@ -1,7 +1,7 @@
 import express from 'express'
 const transfRouter = express.Router();
 import transferenciaController from '../../controllers/transacao/transferenciaController.mjs';
-import { autenticarJWT } from '../../appDosDois.mjs';
+import { autenticarJWT } from '../../middlewares/auth.mjs';
 
 transfRouter.use(autenticarJWT)
 

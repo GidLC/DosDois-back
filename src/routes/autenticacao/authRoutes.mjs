@@ -1,10 +1,10 @@
 import express from 'express';
 const authRouter = express.Router();
 import authController from '../../controllers/autenticacao/authController.mjs';
-import { autenticarJWT } from '../../appDosDois.mjs';
+import { autenticarJWT } from '../../middlewares/auth.mjs';
 
 authRouter.post('/cadastro', authController.cadastroUsuario)
-authRouter.get('/buscaCadastro', authController.buscaCadastro)
+//authRouter.get('/buscaCadastro', authController.buscaCadastro)
 authRouter.put('/vincCadastro', authController.vincCadastro)
 authRouter.post('/login', authController.loginUsuario)
 authRouter.get('/buscaCadEmail', authController.buscaCadastroEmail)

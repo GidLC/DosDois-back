@@ -1,7 +1,7 @@
 import express from 'express';
 const frontRouter = express.Router();
 import frontController from '../../controllers/front/frontController.mjs';
-import { autenticarJWT } from '../../appDosDois.mjs';
+import { autenticarJWT } from '../../middlewares/auth.mjs';
 
 frontRouter.use(autenticarJWT)
 

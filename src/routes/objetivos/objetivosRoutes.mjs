@@ -1,7 +1,7 @@
 import express from 'express'
 const objetivoRouter = express.Router()
 import objetivosController from '../../controllers/objetivos/objetivosController.mjs'
-import { autenticarJWT } from '../../appDosDois.mjs'
+import { autenticarJWT } from '../../middlewares/auth.mjs';
 
 objetivoRouter.use(autenticarJWT)
 

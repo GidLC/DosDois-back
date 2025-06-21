@@ -1,4 +1,3 @@
-import { autenticarJWT } from "../../appDosDois.mjs";
 import AuthModel from "../../models/autenticacao/authModel.mjs";
 
 
