@@ -1,6 +1,9 @@
 import express from 'express'
 const tagsRouter = express.Router()
 import tagsController from '../../controllers/tags/tagsController.mjs'
+import { autenticarJWT } from '../../middlewares/auth.mjs';
+
+tagsRouter.use(autenticarJWT)
 
 tagsRouter.post('/addTag', tagsController.addTags)
 tagsRouter.get('/readAllTags', tagsController.readAllTags)

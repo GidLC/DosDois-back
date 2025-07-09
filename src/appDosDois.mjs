@@ -1,4 +1,4 @@
-import {app} from './config.mjs';
+import { app } from './config.mjs';
 import authRouter from './routes/autenticacao/authRoutes.mjs';
 import bancoRouter from './routes/banco/bancoRoutes.mjs';
 import CategoriaTrRouter from './routes/categoria/CategoriaTrRoutes.mjs';

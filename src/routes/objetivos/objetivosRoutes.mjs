@@ -1,6 +1,9 @@
 import express from 'express'
 const objetivoRouter = express.Router()
 import objetivosController from '../../controllers/objetivos/objetivosController.mjs'
+import { autenticarJWT } from '../../middlewares/auth.mjs';
+
+objetivoRouter.use(autenticarJWT)
 
 objetivoRouter.post('/addObjetivo', objetivosController.addObjetivo)
 objetivoRouter.get('/readObjetivos', objetivosController.readObjetivos)

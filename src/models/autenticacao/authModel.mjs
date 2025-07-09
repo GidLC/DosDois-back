@@ -5,6 +5,7 @@ import EmailParceiro from "../../data/emails/Cadastro/EmailParceiro.mjs";
 import EmailCadastro from "../../data/emails/Cadastro/EmailCadastro.mjs";
 import enviaWhats from '../../data/enviaWhats/enviaWhats.mjs';
 import separaData from '../../data/SeparaData/SeparaData.mjs';
+import { createToken } from '../../middlewares/auth.mjs';
 
 class AuthModel {
 
@@ -268,7 +269,7 @@ class AuthModel {
             })
           });
 
-          return callback(null, {
+          const user = {
             id: login[0].id,
             nome: login[0].nome,
             email: login[0].email,
@@ -279,6 +280,12 @@ class AuthModel {
             email_parceiro: login[0].email_parceiro,
             fone_parceiro: parceiro[0].fone,
             casal_formado: 1
+          }
+
+          const token = createToken(user)
+          return callback(null, {
+            token,
+            userData: user
           })
         } else {
           //Login do usuário secundário
@@ -293,7 +300,8 @@ class AuthModel {
               }
             })
           });
-          return callback(null, {
+
+          const user = {
             id: login[0].id,
             nome: login[0].nome,
             email: login[0].email,
@@ -304,17 +312,29 @@ class AuthModel {
             email_parceiro: login[0].email_parceiro,
             fone_parceiro: parceiro[0].fone,
             casal_formado: 1
+          }
+
+          const token = createToken(user)
+          return callback(null, {
+            token,
+            userData: user
           })
         }
         //Casal ainda não formado
       } else {
-        return callback(null, {
+        const user = {
           id: login[0].id,
           nome: login[0].nome,
           email: login[0].email,
           fone: login[0].fone,
           cod_casal: casal[0].cod_casal,
           casal_formado: 0
+        }
+
+        const token = createToken(user)
+        return callback(null, {
+          token,
+          userData: user
         })
       }
     } catch (error) {
@@ -374,7 +394,7 @@ class AuthModel {
     const data = new Date();
     const v = await separaData(data)
     const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
-      
+
     const query = 'SELECT * FROM senha_temp WHERE token = ? AND uuid = ?';
 
     pool.query(query, [token, uuid], (err, results) => {
@@ -472,7 +492,7 @@ class AuthModel {
 
 
     } catch (error) {
-      console.log(`Não foi possível validar as informações.${ error } `)
+      console.log(`Não foi possível validar as informações.${error} `)
       return callback(error, null)
     }
   }

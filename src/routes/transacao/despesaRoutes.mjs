@@ -1,6 +1,9 @@
 import express from 'express';
 const despesaRouter = express.Router();
 import despesaController from '../../controllers/transacao/despesaController.mjs';
+import { autenticarJWT } from '../../middlewares/auth.mjs';
+
+despesaRouter.use(autenticarJWT)
 
 despesaRouter.post('/addDespesa', despesaController.addDespesa);
 despesaRouter.get('/readDespesa', despesaController.readDespesa);
