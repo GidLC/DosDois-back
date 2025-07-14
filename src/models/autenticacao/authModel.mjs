@@ -200,7 +200,7 @@ class AuthModel {
         });
       }));
 
-      enviaWhats(fone, `Você acaba de se vincular como parceira(o) de ${parceiro.nome} no aplicativo DosDois. Aproveitem a aplicação e sucesso`)
+      enviaWhats(fone, `Você acaba de se vincular como parceira(o) de ${parceiro.nome} no aplicativo *DosDois*. Aproveitem a aplicação e sucesso`)
       return callback(null, casalResult);
     } catch (error) {
       console.error(`Não foi possível vincular o cadastro. ${error}`)
@@ -381,7 +381,7 @@ class AuthModel {
 
       const url = `https://dosdoisapp.com.br/esq-senha/${token}/${uuid}`
 
-      enviaWhats(buscaUsuario[0].fone, `Você acaba de solicitar a mudança de senha no aplicativo OneCash. Para realizar a alteração basta acessar o link: ${url}`)
+      enviaWhats(buscaUsuario[0].fone, `Você acaba de solicitar a mudança de senha no aplicativo *DosDois*. Para realizar a alteração basta acessar o link: ${url}`)
       return callback(null, "Token Gerado")
     } catch (error) {
       console.error(`Houve um erro ao buscar cadastro. ${error}`)
