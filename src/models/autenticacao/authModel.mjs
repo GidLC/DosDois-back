@@ -441,8 +441,9 @@ class AuthModel {
   }
 
   static editUser = (nome, email, fone, id, callback) => {
-    const query = 'UPDATE usuario SET nome = ? AND email = ? AND fone = ? WHERE id = ?'
-    pool.query(query, [nome, email, fone, id], (err, results) => {
+    console.log(typeof(nome))
+    const query = 'UPDATE usuario SET nome = ?, fone = ? WHERE id = ?'
+    pool.query(query, [nome, fone, id], (err, results) => {
       if (err) {
         return callback(err, null)
       }

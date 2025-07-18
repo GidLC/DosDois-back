@@ -178,7 +178,7 @@ class SaldosModel {
         }
     }
 
-    static saldoPorPeriodo = async (casal, usuario, ano, callback) => {
+    static saldoPorPeriodo = async (casal, usuario, ano, parceiro, callback) => {
         try {
             //Função para buscar saldos em um determinado periodo
             const getSaldos = async (queryBanco, paramsBanco) => {
@@ -390,11 +390,12 @@ class SaldosModel {
 
             const queryBancoInd = 'SELECT * FROM banco WHERE casal = ? AND usuario = ? AND tipo = 0 AND arquivo = 0';
             const saldosIndividuais = await getSaldos(queryBancoInd, [casal, usuario]);
+            const saldosParceiro = await getSaldos(queryBancoInd, [casal, parceiro])
 
             const queryBancoCol = 'SELECT * FROM banco WHERE casal = ? AND tipo = 1 AND arquivo = 0';
             const saldosColetivos = await getSaldos(queryBancoCol, [casal]);
 
-            return callback(null, { saldosIndividuais, saldosColetivos });
+            return callback(null, { saldosIndividuais, saldosColetivos, saldosParceiro });
         } catch (error) {
             console.error(`Não foi possível gerar o saldo ${error}`);
             return callback(error, null);

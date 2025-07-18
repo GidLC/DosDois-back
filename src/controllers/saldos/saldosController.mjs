@@ -17,8 +17,9 @@ const saldoPorPeriodo = (req, res) => {
     const casal = req.header('auth')
     const usuario = req.header('usuario')
     const ano = req.header('ano')
+    const parceiro = req.header('parceiro')
 
-    SaldosModel.saldoPorPeriodo(casal, usuario, ano, (err, results) => {
+    SaldosModel.saldoPorPeriodo(casal, usuario, ano, parceiro, (err, results) => {
         if (err) {
             return res.status(500).json({ error: `Erro ao encontrar os saldos. ${err}` });
         }

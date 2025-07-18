@@ -108,7 +108,7 @@ const editUser = (req, res) => {
 
   AuthModel.editUser(nome, email, fone, id, (err, results) => {
     if (err) {
-      return res.status(500).json({ error: "Erro ao realizar a alteração" })
+      return res.status(500).json({ error: `Erro ao realizar a alteração. ${err}` })
     }
 
     return res.status(200).json({ message: "Alteração realizada com sucesso", results })
