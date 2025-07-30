@@ -274,10 +274,11 @@ class AuthModel {
             nome: login[0].nome,
             email: login[0].email,
             fone: login[0].fone,
+            sexo: login[0].sexo,
             cod_casal: casal[0].cod_casal,
             id_parceiro: id_parceiro,
             nome_parceiro: parceiro[0].nome,
-            email_parceiro: login[0].email_parceiro,
+            email_parceiro: parceiro[0].email,
             fone_parceiro: parceiro[0].fone,
             casal_formado: 1
           }
@@ -306,10 +307,11 @@ class AuthModel {
             nome: login[0].nome,
             email: login[0].email,
             fone: login[0].fone,
+            sexo: login[0].sexo,
             cod_casal: casal[0].cod_casal,
             id_parceiro: id_parceiro,
             nome_parceiro: parceiro[0].nome,
-            email_parceiro: login[0].email_parceiro,
+            email_parceiro: parceiro[0].email,
             fone_parceiro: parceiro[0].fone,
             casal_formado: 1
           }
@@ -327,6 +329,7 @@ class AuthModel {
           nome: login[0].nome,
           email: login[0].email,
           fone: login[0].fone,
+          sexo: login[0].sexo,
           cod_casal: casal[0].cod_casal,
           casal_formado: 0
         }

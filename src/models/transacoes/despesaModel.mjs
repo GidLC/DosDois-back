@@ -93,7 +93,7 @@ class DespesaModel {
             const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
             const camposFixos = (fixa == 1) ? ', des.id_fixo, des.data_criacao' : '';
             const queryBase = `
-                SELECT des.id, des.descricao, des.valor, des.dia, des.mes, des.ano, des.status, des.obs,
+                SELECT des.id, des.descricao, des.valor, des.dia, des.mes, des.ano, des.status, des.obs, des.usuario,
                        cat.nome AS nome_categoria, ic.ion_nome AS nome_icone, 
                        cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria,
                        t.id AS id_tag, t.nome AS nome_tag${camposFixos}
