@@ -1,5 +1,6 @@
 import AuthModel from "../../models/autenticacao/authModel.mjs";
-
+import path from "path";
+import fs from "fs";
 
 //Sem autenticação
 const loginUsuario = (req, res) => {
@@ -26,7 +27,7 @@ const cadastroUsuario = (req, res) => {
       console.error('Erro ao salvar o usuário:', err);
       return res.status(500).json({ error: 'Erro ao salvar o usuário' });
     }
-    
+
     res.status(200).json({ message: 'Usuário cadastrado com sucesso', resultado });
   });
 };
@@ -104,9 +105,9 @@ const mudaSenha = (req, res) => {
 
 //Autenticação JWT
 const editUser = (req, res) => {
-  const { nome, email, fone, id } = req.body
+  const { nome, email, fone, id, foto } = req.body
 
-  AuthModel.editUser(nome, email, fone, id, (err, results) => {
+  AuthModel.editUser(nome, email, fone, id, foto, (err, results) => {
     if (err) {
       return res.status(500).json({ error: `Erro ao realizar a alteração. ${err}` })
     }
@@ -122,12 +123,35 @@ const validaVinculo = (req, res) => {
 
   AuthModel.validaVinculo(casal, uuid, (err, results) => {
     if (err) {
-      return res.status(500).json({message: `Não foi possível validar as informações. ${err}`})
+      return res.status(500).json({ message: `Não foi possível validar as informações. ${err}` })
     }
 
-    return res.status(200).json({message: 'OK', results})
+    return res.status(200).json({ message: 'OK', results })
   })
 }
 
-export default { cadastroUsuario, loginUsuario, vincCadastro, buscaCadastroEmail, validaToken, mudaSenha, editUser, validaVinculo }
+//Autenticação JWT
+
+const getPerfil = (req, res) => {
+  const idUser = req.header("idUser");
+
+  if (!idUser) {
+    return res.status(400).json({ error: "ID do usuário não fornecido no header." });
+  }
+
+  AuthModel.getPerfil(idUser, (err, caminhoCompleto) => {
+    if (err) {
+      return res.status(500).json({ error: `Não foi possível buscar a imagem de perfil. ${err}` });
+    }
+
+    if (!fs.existsSync(caminhoCompleto)) {
+      return res.status(404).send("Imagem não encontrada");
+    }
+
+    console.log(caminhoCompleto)
+    return res.sendFile(caminhoCompleto);
+  });
+};
+
+export default { cadastroUsuario, loginUsuario, vincCadastro, buscaCadastroEmail, validaToken, mudaSenha, editUser, validaVinculo, getPerfil }
 

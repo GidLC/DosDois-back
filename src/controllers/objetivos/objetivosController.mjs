@@ -102,11 +102,11 @@ const mudaStatusObjetivo = (req, res) => {
 
 const editObjetivo = (req, res) => {
     const casal = req.header('auth')
-    const {id, descricao, valor_final, prazo, cor, icone } = req.body
-    console.log(id, descricao, valor_final, prazo, cor, icone )
+    const { id, descricao, valor_final, prazo, cor, icone } = req.body
 
     ObjetivoModel.editObjetivo(casal, id, descricao, valor_final, prazo, cor, icone, (err, results) => {
         if (err) {
+            console.log(err)
             return res.status(500).json({ error: 'Não foi possível editar esse objetivo', err })
         }
 
@@ -114,4 +114,18 @@ const editObjetivo = (req, res) => {
     })
 }
 
-export default { addObjetivo, readObjetivos, readObjetivoId, deleteObjetivo, aporteObjetivo, readAportes, mudaStatusObjetivo, editObjetivo }
+const deleteAporte = (req, res) => {
+    const casal = req.header('auth')
+    const id = req.header('id')
+
+    ObjetivoModel.deleteAporte(id, casal, (err, results) => {
+        if (err) {
+            console.log(err)
+            return res.status(500).json({ error: 'Não foi possível excluir esse depósito' })
+        }
+
+        res.status(200).json({ message: 'Depósito excluido com sucesso', results })
+    })
+}
+
+export default { addObjetivo, readObjetivos, readObjetivoId, deleteObjetivo, aporteObjetivo, readAportes, mudaStatusObjetivo, editObjetivo, deleteAporte }

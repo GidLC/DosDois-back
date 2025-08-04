@@ -12,5 +12,6 @@ authRouter.put('/mudaSenha', authController.mudaSenha)
 authRouter.get('/validaToken', authController.validaToken)
 authRouter.put('/editCadastro', autenticarJWT, authController.editUser)
 authRouter.get('/validaVinculo', authController.validaVinculo)
+authRouter.get('/getPerfil', autenticarJWT, authController.getPerfil)
 
 export default authRouter;
