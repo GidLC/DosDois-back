@@ -5,7 +5,7 @@ const separaData = async (data) => {
 
     return {
         ano: dateBRT.year,
-        mes: dateBRT.month - 1,
+        mes: dateBRT.month < 10 ? Number(`0${dateBRT.month}`) : dateBRT.month - 1,
         dia: dateBRT.day,
         hora: dateBRT.hour,
         minuto: dateBRT.minute,

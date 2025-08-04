@@ -1,4 +1,5 @@
 import { pool } from "../../config.mjs";
+import separaData from "../../data/SeparaData/SeparaData.mjs";
 
 class ObjetivoModel {
     static addObjetivo = (descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone, callback) => {
@@ -136,10 +137,22 @@ class ObjetivoModel {
         })
     }
 
-    static editObjetivo = (casal, id, descricao, valor_final, prazo, cor, icone, callback) => {
+    static editObjetivo = async (casal, id, descricao, valor_final, prazo, cor, icone, callback) => {
+        const objData = await separaData(prazo)
         const query = 'UPDATE objetivo SET descricao = ?, valor_final = ?, prazo = ?, cor = ?, icone = ? WHERE id = ? AND casal = ?'
 
-        pool.query(query, [descricao, valor_final, prazo, cor, icone, id, casal], (err, results) => {
+        pool.query(query, [descricao, valor_final, `${objData.ano}-${objData.mes}-${objData.dia}`, cor, icone, id, casal], (err, results) => {
+            if (err) {
+                return callback(err, null)
+            }
+            return callback(null, results)
+        })
+    }
+
+    static deleteAporte = (aporteId, casal, callback) => {
+        const query = 'DELETE FROM aporte_objetivo WHERE id = ? AND casal= ?'
+
+        pool.query(query, [aporteId, casal], (err, results) => {
             if (err) {
                 return callback(err, null)
             }

@@ -10,8 +10,8 @@ const app = express();
 const nomeAPI = 'apiDDV1'
 
 app.use(cors());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+app.use(bodyParser.json({limit: '10mb'}));
 
 const pool = mysql.createPool({
   host: host,

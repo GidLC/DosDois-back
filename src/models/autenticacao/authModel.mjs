@@ -6,7 +6,12 @@ import EmailCadastro from "../../data/emails/Cadastro/EmailCadastro.mjs";
 import enviaWhats from '../../data/enviaWhats/enviaWhats.mjs';
 import separaData from '../../data/SeparaData/SeparaData.mjs';
 import { createToken } from '../../middlewares/auth.mjs';
+import fs from 'fs';
+import path from 'path';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 class AuthModel {
 
   static cadastroUsuario = async (nome, email, senha, fone, dt_criacao, sexo, callback) => {
@@ -443,21 +448,38 @@ class AuthModel {
     }
   }
 
-  static editUser = (nome, email, fone, id, callback) => {
-    console.log(typeof(nome))
-    const query = 'UPDATE usuario SET nome = ?, fone = ? WHERE id = ?'
-    pool.query(query, [nome, fone, id], (err, results) => {
-      if (err) {
-        return callback(err, null)
+  static editUser = (nome, email, fone, id, foto, callback) => {
+
+    let caminhoFoto = null;
+
+    if (foto) {
+      const matches = foto.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
+
+      if (!matches || matches.length !== 3) {
+        return callback(`Formato de imagem inválido`, null)
       }
 
+      const ext = matches[1];
+      const buffer = Buffer.from(matches[2], "base64");
+      const nomeArquivo = `perfil_${id}_${Date.now()}.${ext}`;
+      const caminho = path.join(__dirname, "../..", "uploads/perfis", nomeArquivo);
+
+      fs.writeFileSync(caminho, buffer);
+      caminhoFoto = `/uploads/${nomeArquivo}`;
+    }
+
+    const query = 'UPDATE usuario SET nome = ?, fone = ?, perfil_url = ? WHERE id = ?'
+    pool.query(query, [nome, fone, String(caminhoFoto), id], (err, results) => {
+      if (err) {
+        console.error(err)
+        return callback(err, null)
+      }
 
       return callback(null, results)
     })
   }
 
   static validaVinculo = async (casal, uuid, callback) => {
-    console.log({ casal, uuid })
     try {
       const queryValida = `SELECT v.ativo FROM vinculos AS v
                               WHERE v.casal = ? AND v.uuid = ? AND v.ativo = 1`
@@ -501,6 +523,22 @@ class AuthModel {
     }
   }
 
+  static getPerfil = (idUser, callback) => {
+    const query = `SELECT perfil_url FROM usuario WHERE id = ?`;
+
+    pool.query(query, [idUser], (err, results) => {
+      if (err) {
+        return callback(err, null);
+      }
+
+      if (!results.length || !results[0].perfil_url) {
+        return callback("Foto não encontrada", null);
+      }
+
+      const caminho = path.join(__dirname, "../..", results[0].perfil_url);
+      return callback(null, caminho);
+    });
+  };
 }
 
 //Criar lógica para excluir dados do BD
