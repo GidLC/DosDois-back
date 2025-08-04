@@ -465,7 +465,7 @@ class AuthModel {
       const caminho = path.join(__dirname, "../..", "uploads/perfis", nomeArquivo);
 
       fs.writeFileSync(caminho, buffer);
-      caminhoFoto = `/uploads/${nomeArquivo}`;
+      caminhoFoto = `/uploads/perfis/${nomeArquivo}`;
     }
 
     const query = 'UPDATE usuario SET nome = ?, fone = ?, perfil_url = ? WHERE id = ?'

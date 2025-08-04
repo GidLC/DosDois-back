@@ -148,7 +148,8 @@ const getPerfil = (req, res) => {
       return res.status(404).send("Imagem não encontrada");
     }
 
-    return res.sendFile(caminhoCompleto, { root: "." });
+    console.log(caminhoCompleto)
+    return res.sendFile(caminhoCompleto);
   });
 };
 
