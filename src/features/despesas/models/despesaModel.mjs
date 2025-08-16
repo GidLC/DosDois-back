@@ -185,7 +185,7 @@ class DespesaModel {
             }
 
             // Filtro para despesas individuais
-            if (tipo) {
+            if (tipo || tipo === 0) {
                 queryBase += ' AND des.tipo = ?';
                 params.push(tipo)
             }
@@ -233,16 +233,26 @@ class DespesaModel {
 
                 // Agrupa despesas e soma total por mês
                 const despesasPorMes = {};
-                const totaisPorMes = {};
+                const totaisEfetPorMes = {};
+                const totaisPendPorMes = {};
 
                 results.forEach(d => {
                     const chave = `${d.ano}-${String(d.mes).padStart(2, '0')}`;
                     if (!despesasPorMes[chave]) {
                         despesasPorMes[chave] = [];
-                        totaisPorMes[chave] = 0;
+                        totaisEfetPorMes[chave] = 0;
+                        totaisPendPorMes[chave] = 0
                     }
                     despesasPorMes[chave].push(d);
-                    totaisPorMes[chave] += parseFloat(d.valor);
+
+                    if (d.status == 0) {
+                        totaisPendPorMes[chave] += parseFloat(d.valor);
+                    }
+
+                    if (d.status == 1) {
+                        totaisEfetPorMes[chave] += parseFloat(d.valor);
+                    }
+
                 });
 
                 // Gera lista completa de meses do período
@@ -254,7 +264,8 @@ class DespesaModel {
                     const chave = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
                     retorno.push({
                         mesAno: chave,
-                        totalMes: totaisPorMes[chave] || 0,
+                        totalEfetMes: totaisEfetPorMes[chave] || 0,
+                        totalPendMes: totaisPendPorMes[chave] || 0,
                         transacoes: despesasPorMes[chave] || []
                     });
                     current.setMonth(current.getMonth() + 1);
