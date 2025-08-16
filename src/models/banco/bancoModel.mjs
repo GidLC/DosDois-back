@@ -1,4 +1,4 @@
-import { pool } from "../../config.mjs";
+import { pool } from "../../config/config.mjs";
 
 class BancoModel {
     static addBanco = (saldo_inicial, casal, nome, tipo, usuario, callback) => {

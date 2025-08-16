@@ -1,5 +1,5 @@
-import { pool } from "../../config.mjs";
-import SeparaData from '../../data/SeparaData/SeparaData.mjs';
+import { pool } from "../../../config/config.mjs";
+import SeparaData from '../../../data/SeparaData/SeparaData.mjs';
 import * as crypto from 'crypto';
 
 class DespesaModel {
@@ -39,7 +39,7 @@ class DespesaModel {
                                 if (err) {
                                     reject(err)
                                 }
-        
+
                                 resolve(results)
                             })
                         })
@@ -88,42 +88,186 @@ class DespesaModel {
     }
 
     //Busca todas as depesas de um determinado mês e ano(individuais ou coletivas, fixas ou não)
-    static readDespesa = async (usuario, casal, mes, ano, tipo, fixa, callback) => {
+    // static readDespesa = async (usuario, casal, mes, ano, tipo, fixa, callback) => {
+    //     try {
+    //         const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
+    //         const camposFixos = (fixa == 1) ? ', des.id_fixo, des.data_criacao' : '';
+    //         const queryBase = `
+    //             SELECT des.id, des.descricao, des.valor, des.dia, des.mes, des.ano, des.status, des.obs, des.usuario,
+    //                    cat.nome AS nome_categoria, ic.ion_nome AS nome_icone, 
+    //                    cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria,
+    //                    t.id AS id_tag, t.nome AS nome_tag${camposFixos}
+    //             FROM ${tabela} AS des
+    //             INNER JOIN categoria_tr AS cat ON cat.id = des.categoria
+    //             INNER JOIN icones AS ic ON ic.id = cat.icone
+    //             INNER JOIN cor ON cor.id = cat.cor
+    //             INNER JOIN banco AS ba ON ba.id = des.banco
+    //             LEFT JOIN tags AS t ON t.id = des.tag
+    //             WHERE des.casal = ? AND des.mes = ? AND des.ano = ? AND des.tipo = ?`;
+
+    //         // Adiciona condição extra para despesas individuais
+    //         const query = (tipo == 0) ? `${queryBase} AND des.usuario = ?` : queryBase;
+
+    //         // Define os parâmetros baseados no tipo
+    //         const params = (tipo == 0)
+    //             ? [casal, mes, ano, tipo, usuario]
+    //             : [casal, mes, ano, tipo];
+
+    //         pool.query(query, params, (err, results) => {
+    //             if (err) {
+    //                 return callback(err, null);
+    //             }
+    //             return callback(null, results);
+    //         });
+    //     } catch (error) {
+    //         console.error('Erro ao executar consulta:', error);
+    //         return callback(error, null);
+    //     }
+    // }
+
+    static readDespesa = async ({
+        usuario,
+        casal,
+        mes,
+        ano,
+        dataInicio,
+        dataFim,
+        tipo,
+        fixa,
+        categoria,
+        tag,
+        banco,
+        status,
+        valorMin,
+        valorMax,
+        descricao
+    }, callback) => {
         try {
             const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
             const camposFixos = (fixa == 1) ? ', des.id_fixo, des.data_criacao' : '';
-            const queryBase = `
-                SELECT des.id, des.descricao, des.valor, des.dia, des.mes, des.ano, des.status, des.obs, des.usuario,
-                       cat.nome AS nome_categoria, ic.ion_nome AS nome_icone, 
-                       cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria,
-                       t.id AS id_tag, t.nome AS nome_tag${camposFixos}
-                FROM ${tabela} AS des
-                INNER JOIN categoria_tr AS cat ON cat.id = des.categoria
-                INNER JOIN icones AS ic ON ic.id = cat.icone
-                INNER JOIN cor ON cor.id = cat.cor
-                INNER JOIN banco AS ba ON ba.id = des.banco
-                LEFT JOIN tags AS t ON t.id = des.tag
-                WHERE des.casal = ? AND des.mes = ? AND des.ano = ? AND des.tipo = ?`;
 
-            // Adiciona condição extra para despesas individuais
-            const query = (tipo == 0) ? `${queryBase} AND des.usuario = ?` : queryBase;
+            let queryBase = `
+            SELECT des.id, des.descricao, des.valor, des.dia, des.mes, des.ano, des.status, des.obs, des.usuario,
+                   cat.nome AS nome_categoria, ic.ion_nome AS nome_icone, 
+                   cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria,
+                   t.id AS id_tag, t.nome AS nome_tag${camposFixos}
+            FROM ${tabela} AS des
+            INNER JOIN categoria_tr AS cat ON cat.id = des.categoria
+            INNER JOIN icones AS ic ON ic.id = cat.icone
+            INNER JOIN cor ON cor.id = cat.cor
+            INNER JOIN banco AS ba ON ba.id = des.banco
+            LEFT JOIN tags AS t ON t.id = des.tag
+            WHERE des.casal = ? `;
 
-            // Define os parâmetros baseados no tipo
-            const params = (tipo == 0)
-                ? [casal, mes, ano, tipo, usuario]
-                : [casal, mes, ano, tipo];
+            const params = [casal];
 
-            pool.query(query, params, (err, results) => {
-                if (err) {
-                    return callback(err, null);
+            // Detecta tipo de busca e define range
+            let inicio, fim;
+            if (dataInicio && dataFim) {
+                inicio = new Date(dataInicio);
+                fim = new Date(dataFim);
+                queryBase += `
+              AND STR_TO_DATE(CONCAT(des.dia, '/', des.mes, '/', des.ano), '%d/%m/%Y') 
+                  BETWEEN ? AND ?`;
+                params.push(dataInicio, dataFim);
+
+            } else if (ano && mes) {
+                inicio = new Date(ano, mes - 1, 1);
+                fim = new Date(ano, mes, 0);
+                queryBase += ' AND des.ano = ? AND des.mes = ?';
+                params.push(ano, mes);
+
+            } else if (ano) {
+                inicio = new Date(ano, 0, 1);
+                fim = new Date(ano, 11, 31);
+                queryBase += ' AND des.ano = ?';
+                params.push(ano);
+            }
+
+            // Filtro para despesas individuais
+            if (tipo) {
+                queryBase += ' AND des.tipo = ?';
+                params.push(tipo)
+            }
+
+            if (tipo == 0) {
+                queryBase += ' AND des.usuario = ?';
+                params.push(usuario);
+            }
+
+            // --- Filtros opcionais ---
+            if (categoria) {
+                queryBase += ' AND des.categoria = ?';
+                params.push(categoria);
+            }
+            if (tag) {
+                queryBase += ' AND des.tag = ?';
+                params.push(tag);
+            }
+            if (banco) {
+                queryBase += ' AND des.banco = ?';
+                params.push(banco);
+            }
+            if (status !== undefined) {
+                queryBase += ' AND des.status = ?';
+                params.push(status);
+            }
+            if (valorMin !== undefined) {
+                queryBase += ' AND des.valor >= ?';
+                params.push(valorMin);
+            }
+            if (valorMax !== undefined) {
+                queryBase += ' AND des.valor <= ?';
+                params.push(valorMax);
+            }
+            if (descricao) {
+                queryBase += ' AND des.descricao LIKE ?';
+                params.push(`%${descricao}%`);
+            }
+
+            // Ordenação
+            queryBase += ' ORDER BY des.ano, des.mes, des.dia';
+
+            pool.query(queryBase, params, (err, results) => {
+                if (err) return callback(err, null);
+
+                // Agrupa despesas e soma total por mês
+                const despesasPorMes = {};
+                const totaisPorMes = {};
+
+                results.forEach(d => {
+                    const chave = `${d.ano}-${String(d.mes).padStart(2, '0')}`;
+                    if (!despesasPorMes[chave]) {
+                        despesasPorMes[chave] = [];
+                        totaisPorMes[chave] = 0;
+                    }
+                    despesasPorMes[chave].push(d);
+                    totaisPorMes[chave] += parseFloat(d.valor);
+                });
+
+                // Gera lista completa de meses do período
+                const retorno = [];
+                let current = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+                const end = new Date(fim.getFullYear(), fim.getMonth(), 1);
+
+                while (current <= end) {
+                    const chave = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+                    retorno.push({
+                        mesAno: chave,
+                        totalMes: totaisPorMes[chave] || 0,
+                        transacoes: despesasPorMes[chave] || []
+                    });
+                    current.setMonth(current.getMonth() + 1);
                 }
-                return callback(null, results);
+
+                return callback(null, retorno);
             });
         } catch (error) {
             console.error('Erro ao executar consulta:', error);
             return callback(error, null);
         }
     }
+
 
     static readDespesaID = async (id, casal, fixa, callback) => {
         try {

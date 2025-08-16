@@ -1,4 +1,4 @@
-import { pool } from "../../config.mjs";
+import { pool } from "../../config/config.mjs";
 import SeparaData from "../../data/SeparaData/SeparaData.mjs";
 
 class TransfModel {

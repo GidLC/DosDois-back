@@ -1,4 +1,4 @@
-import { pool } from "../../config.mjs";
+import { pool } from "../../config/config.mjs";
 import separaData from "../../data/SeparaData/SeparaData.mjs";
 
 class ObjetivoModel {
