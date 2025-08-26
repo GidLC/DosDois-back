@@ -34,7 +34,8 @@ const readDespesa = (req, res) => {
             status,
             valorMin,
             valorMax,
-            descricao
+            descricao,
+            groupBy,
         } = req.query;
 
         // Monta filtros básicos
@@ -53,7 +54,8 @@ const readDespesa = (req, res) => {
             status: status !== undefined ? Number(status) : undefined,
             valorMin: valorMin ? parseFloat(valorMin) : undefined,
             valorMax: valorMax ? parseFloat(valorMax) : undefined,
-            descricao: descricao || null
+            descricao: descricao || null,
+            groupBy: groupBy || null
         };
 
         // Se veio fixa, faz só uma busca

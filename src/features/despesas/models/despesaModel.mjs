@@ -140,7 +140,8 @@ class DespesaModel {
         status,
         valorMin,
         valorMax,
-        descricao
+        descricao,
+        groupBy
     }, callback) => {
         try {
             const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
@@ -184,16 +185,23 @@ class DespesaModel {
                 params.push(ano);
             }
 
-            // Filtro para despesas individuais
-            if (tipo || tipo === 0) {
-                queryBase += ' AND des.tipo = ?';
-                params.push(tipo)
+            if (!inicio || !fim) {
+                inicio = new Date(new Date().getFullYear(), 0, 1); // janeiro atual
+                fim = new Date(new Date().getFullYear(), 11, 31);  // dezembro atual
             }
 
-            if (tipo == 0) {
-                queryBase += ' AND des.usuario = ?';
-                params.push(usuario);
+
+            // Filtro para despesas individuais
+            if (tipo !== undefined) {
+                if (tipo == 0) {
+                    queryBase += ' AND des.tipo = ? AND des.usuario = ?';
+                    params.push(tipo, usuario);
+                } else {
+                    queryBase += ' AND des.tipo = ?';
+                    params.push(tipo);
+                }
             }
+
 
             // --- Filtros opcionais ---
             if (categoria) {
@@ -231,29 +239,91 @@ class DespesaModel {
             pool.query(queryBase, params, (err, results) => {
                 if (err) return callback(err, null);
 
-                // Agrupa despesas e soma total por mês
+                // Agrupa despesas e soma total por mês(saldo geral, pendente, efetivado)
                 const despesasPorMes = {};
+                const totaisGeralPorMes = {};
                 const totaisEfetPorMes = {};
                 const totaisPendPorMes = {};
 
                 results.forEach(d => {
                     const chave = `${d.ano}-${String(d.mes).padStart(2, '0')}`;
+                    //Adciona valor 0 a meses que não tiverem movimentações
                     if (!despesasPorMes[chave]) {
                         despesasPorMes[chave] = [];
+                        totaisGeralPorMes[chave] = 0;
                         totaisEfetPorMes[chave] = 0;
-                        totaisPendPorMes[chave] = 0
+                        totaisPendPorMes[chave] = 0;
                     }
                     despesasPorMes[chave].push(d);
 
+                    //Incrementa despesas indepentende do status
+                    totaisGeralPorMes[chave] += parseFloat(d.valor)
+
+                    //Incrementa despesas pendentes
                     if (d.status == 0) {
                         totaisPendPorMes[chave] += parseFloat(d.valor);
                     }
 
+                    //Incrementa despesas efetivadas
                     if (d.status == 1) {
                         totaisEfetPorMes[chave] += parseFloat(d.valor);
                     }
 
                 });
+
+                //Função para agrupar filtragem(categoria, banco, tag)
+                // Se quiser também devolver o id do grupo, inclua em SELECT:
+                //  cat.id AS id_categoria, ba.id AS id_banco, t.id AS id_tag
+                const agruparPorFiltro = (transacoes = [], filtro) => {
+                    // Mapeia o filtro para o nome de coluna correto
+                    const nomeFieldMap = {
+                        categoria: 'nome_categoria',
+                        banco: 'nome_banco',
+                        tag: 'nome_tag',
+                        // permite passar direto o campo já no formato nome_<algo>
+                        ['nome_categoria']: 'nome_categoria',
+                        ['nome_banco']: 'nome_banco',
+                        ['nome_tag']: 'nome_tag'
+                    };
+                    const idFieldMap = {
+                        categoria: 'id_categoria',
+                        banco: 'id_banco',
+                        tag: 'id_tag'
+                    };
+
+                    const nomeField = nomeFieldMap[filtro] || filtro;   // fallback: usa o próprio filtro
+                    const idField = idFieldMap[filtro];               // pode ser undefined (sem id)
+
+                    const mapa = {};
+
+                    for (const t of transacoes) {
+                        const chave = (t?.[nomeField] ?? 'Não definido') || 'Não definido';
+                        const idVal = idField ? (t?.[idField] ?? null) : null;
+
+                        if (!mapa[chave]) {
+                            mapa[chave] = {
+                                groupName: chave,
+                                ...(idField ? { id: idVal } : {}),
+                                totalGeral: 0,
+                                totalEfet: 0,
+                                totalPend: 0
+                            };
+                        }
+
+                        const valor = Number(t?.valor) || 0;
+                        mapa[chave].totalGeral += valor;
+                        if (Number(t?.status) === 1) {
+                            mapa[chave].totalEfet += valor;
+                        } else {
+                            mapa[chave].totalPend += valor;
+                        }
+                    }
+
+                    // Ordena desc por total geral (opcional)
+                    return Object.values(mapa).sort((a, b) => b.totalGeral - a.totalGeral);
+                };
+
+
 
                 // Gera lista completa de meses do período
                 const retorno = [];
@@ -264,9 +334,11 @@ class DespesaModel {
                     const chave = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
                     retorno.push({
                         mesAno: chave,
+                        totalGeralMes: totaisGeralPorMes[chave] || 0,
                         totalEfetMes: totaisEfetPorMes[chave] || 0,
                         totalPendMes: totaisPendPorMes[chave] || 0,
-                        transacoes: despesasPorMes[chave] || []
+                        transacoes: despesasPorMes[chave] || [],
+                        group: groupBy ? agruparPorFiltro(despesasPorMes[chave] || [], groupBy) : []
                     });
                     current.setMonth(current.getMonth() + 1);
                 }
