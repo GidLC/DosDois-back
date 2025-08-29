@@ -1,4 +1,4 @@
-import { pool } from '../../config.mjs';
+import { pool } from "../../config/config.mjs";
 
 class CategoriaTrModel {
     static addCategoriaTr = (nome, tipo, cor, icone, casal, callback) => {

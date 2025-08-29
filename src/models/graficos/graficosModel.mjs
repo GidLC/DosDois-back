@@ -1,4 +1,4 @@
-import { pool } from "../../config.mjs";
+import { pool } from "../../config/config.mjs";
 
 class graficosModel {
     static receitaPorCategoria = async (casal, usuario, mes, ano, callback) => {

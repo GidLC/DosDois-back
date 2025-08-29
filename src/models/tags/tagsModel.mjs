@@ -1,4 +1,4 @@
-import { pool } from "../../config.mjs"
+import { pool } from "../../config/config.mjs"
 
 class TagsModel {
     static addTag = async (nome, casal, callback) => {

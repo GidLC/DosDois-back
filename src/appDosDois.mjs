@@ -1,11 +1,11 @@
-import { app } from './config.mjs';
+import { app } from './config/config.mjs';
 import authRouter from './routes/autenticacao/authRoutes.mjs';
 import bancoRouter from './routes/banco/bancoRoutes.mjs';
 import CategoriaTrRouter from './routes/categoria/CategoriaTrRoutes.mjs';
 import frontRouter from './routes/front/frontRoutes.mjs';
 import enviaEmailRouter from './routes/mail/enviaEmailRoutes.mjs';
 import compraRouter from './routes/transacao/compraRoutes.mjs';
-import despesaRouter from './routes/transacao/despesaRoutes.mjs';
+import despesaRouter from './features/despesas/routes/despesaRoutes.mjs';
 import receitaRouter from './routes/transacao/receitaRoutes.mjs';
 import graficosRouter from './routes/graficos/GraficosRoutes.mjs';
 import saldosRouter from './routes/saldos/saldosRoutes.mjs';

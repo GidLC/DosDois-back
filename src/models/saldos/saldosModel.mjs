@@ -1,4 +1,4 @@
-import { pool } from "../../config.mjs";
+import { pool } from "../../config/config.mjs";
 
 class SaldosModel {
     //Função para cálculo de todos os saldos da aplicação - saldo estático

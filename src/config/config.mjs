@@ -4,7 +4,7 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import { host, user, password, database, port } from './dbConfig.mjs';
 
-import enviaWhats from './data/enviaWhats/enviaWhats.mjs';
+import enviaWhats from '../data/enviaWhats/enviaWhats.mjs';
 
 const app = express();
 const nomeAPI = 'apiDDV1'
