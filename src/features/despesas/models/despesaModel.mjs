@@ -356,7 +356,7 @@ class DespesaModel {
         try {
             const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
             const camposFixos = (fixa == 1) ? ', des.id_fixo, des.data_criacao' : '';
-            const query = `SELECT des.id, des.descricao, des.valor, des.tipo, des.dia, des.mes, des.ano, des.status, des.obs, cat.id AS id_categoria, cat.nome AS nome_categoria, 
+            const query = `SELECT des.id, des.descricao, des.valor, des.tipo, des.dia, des.mes, des.ano, des.status, des.obs, des.usuario, cat.id AS id_categoria, cat.nome AS nome_categoria, 
                         ba.id AS id_banco, ba.nome AS nome_banco, t.id AS id_tag, t.nome AS nome_tag${camposFixos} FROM ${tabela} AS des
                             INNER JOIN categoria_tr AS cat ON cat.id = des.categoria
                             INNER JOIN banco AS ba ON ba.id = des.banco
