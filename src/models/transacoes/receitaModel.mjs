@@ -1,4 +1,4 @@
-import { pool } from "../../config/config.mjs";
+﻿import { pool } from "../../config/config.mjs";
 import SeparaData from "../../data/SeparaData/SeparaData.mjs";
 import * as crypto from 'crypto'
 
@@ -193,7 +193,7 @@ class ReceitaModel {
         let params
         let query
         //Excluir todas as receitas fixas
-        if (id_fixo != 'undefined' && Number(pend) != 1) {
+        if (id_fixo != undefined && Number(pend) != 1) {
             query = `DELETE FROM receitas_fixas WHERE id_fixo = ? AND casal = ?`
             params = [id_fixo, casal]
         } else {
