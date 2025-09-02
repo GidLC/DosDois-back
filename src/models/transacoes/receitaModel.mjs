@@ -193,13 +193,13 @@ class ReceitaModel {
         let params
         let query
         //Excluir todas as receitas fixas
-        if (id_fixo != 'undefined' && pend != 1) {
+        if (id_fixo != 'undefined' && Number(pend) != 1) {
             query = `DELETE FROM receitas_fixas WHERE id_fixo = ? AND casal = ?`
             params = [id_fixo, casal]
         } else {
-            tabela = (!id_fixo || id_fixo == 'undefined') ? 'receita' : 'receitas_fixas'
+            tabela = (!id_fixo || id_fixo == undefined) ? 'receita' : 'receitas_fixas'
             //Exclui apenas as pendentes
-            params = (pend == 1) ? [id_fixo, usuario, casal] : [id, usuario, casal]
+            params = (Number(pend) == 1) ? [id_fixo, usuario, casal] : [id, usuario, casal]
             query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND usuario = ? AND casal = ?`
         }
 
