@@ -92,7 +92,7 @@ class ReceitaModel {
             const tabela = (fixa == 0 || !fixa) ? 'receita' : 'receitas_fixas';
             const camposFixos = (fixa == 1) ? ', rec.id_fixo, rec.data_criacao' : '';
             const queryBase = `
-                SELECT rec.id, rec.descricao, rec.valor, rec.dia, rec.mes, rec.ano, rec.status, rec.obs,
+                SELECT rec.id, rec.descricao, rec.valor, rec.dia, rec.mes, rec.ano, rec.status, rec.obs, rec.usuario,
                        cat.nome AS nome_categoria, ic.ion_nome AS nome_icone, 
                        cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria,
                        tags.id AS id_tag, tags.nome AS nome_tag${camposFixos}
