@@ -164,6 +164,7 @@ class DespesaModel {
 
             // Detecta tipo de busca e define range
             let inicio, fim;
+            // Por período
             if (dataInicio && dataFim) {
                 inicio = new Date(dataInicio);
                 fim = new Date(dataFim);
@@ -172,12 +173,13 @@ class DespesaModel {
                   BETWEEN ? AND ?`;
                 params.push(dataInicio, dataFim);
 
-            } else if (ano && mes) {
-                inicio = new Date(ano, mes - 1, 1);
-                fim = new Date(ano, mes, 0);
+            //Um mês específico
+            } else if (ano && mes !== null) {
+                inicio = new Date(ano, mes, 1);
+                fim = new Date(ano, mes + 1, 0);
                 queryBase += ' AND des.ano = ? AND des.mes = ?';
                 params.push(ano, mes);
-
+            // Um ano específico
             } else if (ano) {
                 inicio = new Date(ano, 0, 1);
                 fim = new Date(ano, 11, 31);
@@ -331,7 +333,7 @@ class DespesaModel {
                 const end = new Date(fim.getFullYear(), fim.getMonth(), 1);
 
                 while (current <= end) {
-                    const chave = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+                    const chave = `${current.getFullYear()}-${String(current.getMonth()).padStart(2, '0')}`;
                     retorno.push({
                         mesAno: chave,
                         totalGeralMes: totaisGeralPorMes[chave] || 0,
