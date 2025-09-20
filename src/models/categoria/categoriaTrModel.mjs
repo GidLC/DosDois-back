@@ -13,7 +13,7 @@ class CategoriaTrModel {
     }
 
     static loadCategoriaTr = (auth, tipo, callback) => {
-        const query = `SELECT cat.id, cat.nome, cat.cat_sistema, c.codigo AS cod_cor, ic.ion_nome AS icone FROM categoria_tr AS cat 
+        const query = `SELECT cat.id, cat.nome, cat.cat_sistema, cat.padrao, c.codigo AS cod_cor, ic.ion_nome AS icone FROM categoria_tr AS cat 
                         INNER JOIN cor AS c ON cat.cor = c.id 
                         INNER JOIN icones AS ic ON cat.icone = ic.id
                             WHERE casal = ? AND tipo = ? AND cat_sistema != 1

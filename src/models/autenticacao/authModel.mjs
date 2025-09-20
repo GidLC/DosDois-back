@@ -12,6 +12,7 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
 class AuthModel {
 
   static cadastroUsuario = async (nome, email, senha, fone, dt_criacao, sexo, callback) => {
@@ -247,7 +248,7 @@ class AuthModel {
       })
 
       //registra login do usuário
-      /*const queryDataLogin = 'UPDATE usuario SET ultimo_acesso = ? WHERE id = ?';
+      const queryDataLogin = 'UPDATE usuario SET ultimo_acesso = ? WHERE id = ?';
       await new Promise((resolve, reject) => {
         pool.query(queryDataLogin, [hoje, login[0].id], (err, results) => {
           if (err) {
@@ -256,7 +257,7 @@ class AuthModel {
             resolve(results)
           }
         })
-      })*/
+      })
 
       //Casal formado
       if (casal[0].usuario_sec !== null) {
@@ -352,10 +353,11 @@ class AuthModel {
   }
 
   //Usado para trocar a senha no APP
-  static buscaCadastroEmail = async (fone, callback) => {
+  static gerarToken = async ({ fone, tipo }, callback) => {
     try {
       const token = crypto.randomBytes(2).toString('hex');
-      const uuid = crypto.randomUUID();
+      const uuid = tipo === "senha" ? crypto.randomUUID() : null; //Só cria UUID no caso de trocar a senha
+
       const data = new Date()
       const validade = new Date(data.getTime() + 2 * 60 * 60 * 1000).toISOString();
       const v = await separaData(validade)
@@ -376,9 +378,11 @@ class AuthModel {
       }
 
       const userId = buscaUsuario[0].id
-      const queryToken = "INSERT INTO senha_temp (id_usuario, token, validade, uuid) VALUES (?,?,?,?)";
+
+      // Salva token na tabela
+      const queryToken = "INSERT INTO senha_temp (id_usuario, token, validade, uuid, tipo) VALUES (?,?,?,?,?)";
       await new Promise((resolve, reject) => {
-        pool.query(queryToken, [userId, token, momento, uuid], (err, results) => {
+        pool.query(queryToken, [userId, token, momento, uuid, tipo], (err, results) => {
           if (err) {
             reject(err);
           }
@@ -387,34 +391,90 @@ class AuthModel {
         });
       });
 
-      const url = `https://dosdoisapp.com.br/esq-senha/${token}/${uuid}`
+      if (tipo === "senha") {
+        const url = `https://dosdoisapp.com.br/esq-senha/${token}/${uuid}`;
+        enviaWhats(
+          buscaUsuario[0].fone,
+          `Você solicitou a *mudança de senha* no app DosDois. Acesse: ${url}`
+        );
+      } else if (tipo === "login") {
+        enviaWhats(
+          buscaUsuario[0].fone,
+          `Seu código de autenticação no app *DosDois* é: *${token}*, no menu *CONTA* selecione a opção *VALIDAR WHATS* para autenticar-se.`
+        );
+      }
 
-      enviaWhats(buscaUsuario[0].fone, `Você acaba de solicitar a mudança de senha no aplicativo *DosDois*. Para realizar a alteração basta acessar o link: ${url}`)
       return callback(null, "Token Gerado")
     } catch (error) {
-      console.error(`Houve um erro ao buscar cadastro. ${error}`)
-      return callback(error, null)
+      console.error(`Erro ao gerar token: ${error}`);
+      return callback(error, null);
     }
   };
 
-  //Serve para trocar a senha
-  static validaToken = async (token, uuid, callback) => {
+  static validaToken = async ({ fone, token, uuid, tipo }, callback) => {
     const data = new Date();
-    const v = await separaData(data)
-    const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
+    const v = await separaData(data);
+    const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`;
 
-    const query = 'SELECT * FROM senha_temp WHERE token = ? AND uuid = ?';
+    let query, params;
+    if (tipo === "senha") {
+      query = "SELECT * FROM senha_temp WHERE token = ? AND uuid = ? AND tipo = ?";
+      params = [token, uuid, tipo];
+    } else {
+      query = `
+      SELECT * FROM senha_temp AS st
+      JOIN usuario u ON u.id = st.id_usuario
+      WHERE u.fone = ? AND st.token = ? AND st.tipo = ?
+    `;
+      params = [`+${fone}`, token, tipo];
+    }
 
-    pool.query(query, [token, uuid], (err, results) => {
-      if (err || results.length == 0) {
-        return callback(err, null)
-      } else if (momento >= results[0].validade) {
-        return callback("Token inválido", null)
-      } else {
-        return callback(null, results[0])
-      }
+    const temp = await new Promise((resolve, reject) => {
+      pool.query(query, params, (err, results) => {
+        if (err) {
+          reject("Token expirado");
+        } else {
+          resolve(results);
+        }
+      });
     });
-  }
+
+    if (tipo == "senha") {
+      if (temp.length == 0) {
+        return callback("Token inválido ou não encontrado", null)
+      }
+      if (temp[0].validade < momento) {
+        return callback("Token expirado", null)
+      }
+      return callback(null, temp)
+    }
+
+    if (tipo == "login") {
+      if (temp.length == 0) {
+        return callback("Token inválido ou não encontrado", null)
+      }
+      if (temp[0].validade < momento) {
+        return callback("Token expirado", null)
+      }
+
+      const queryUser = `UPDATE usuario SET whats_verificado = 1 WHERE id = ${temp[0].id_usuario}`
+
+      const user = await new Promise((resolve, reject) => {
+        pool.query(queryUser, (err, results) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(results);
+          }
+        });
+      });
+
+      if (user) {
+        return callback(null, user)
+      }
+    }
+  };
+
 
   static mudaSenha = async (id, novaSenha, token, callback) => {
     try {
@@ -539,6 +599,139 @@ class AuthModel {
       return callback(null, caminho);
     });
   };
+
+  static verificaWhats = async (fone, callback) => {
+    const queryLogin = `SELECT * FROM usuario where fone = ?`;
+
+    const login = await new Promise((resolve, reject) => {
+      pool.query(queryLogin, [`+${fone}`], (err, results) => {
+        if (err) {
+          reject(err)
+        }
+        resolve(results)
+      })
+    })
+
+    if (login.length == 0) {
+      return callback(`nao_encontrado`, null)
+    } else if (login[0].whats_verificado == 0) {
+      return callback(`nao_verificado`, null)
+    }
+
+    //Verifica a existência de uma casal vinculado ao usuário
+    const queryCasal = `SELECT * FROM casal WHERE usuario_princ = ? OR usuario_sec = ?`;
+    const casal = await new Promise((resolve, reject) => {
+      pool.query(queryCasal, [login[0].id, login[0].id], (err, results) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(results)
+        }
+      })
+    })
+
+    //registra login do usuário
+    /*const queryDataLogin = 'UPDATE usuario SET ultimo_acesso = ? WHERE id = ?';
+    await new Promise((resolve, reject) => {
+      pool.query(queryDataLogin, [hoje, login[0].id], (err, results) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(results)
+        }
+      })
+    })*/
+
+    //Casal formado
+    if (casal[0].usuario_sec !== null) {
+      //Login do usuário principal
+      if (login[0].id == casal[0].usuario_princ) {
+        const id_parceiro = casal[0].usuario_sec
+        const queryParceiro = `SELECT * FROM usuario where id = ?`;
+        const parceiro = await new Promise((resolve, reject) => {
+          pool.query(queryParceiro, [id_parceiro], (err, results) => {
+            if (err) {
+              reject(err)
+            } else {
+              resolve(results)
+            }
+          })
+        });
+
+        const user = {
+          id: login[0].id,
+          nome: login[0].nome,
+          email: login[0].email,
+          fone: login[0].fone,
+          sexo: login[0].sexo,
+          cod_casal: casal[0].cod_casal,
+          id_parceiro: id_parceiro,
+          nome_parceiro: parceiro[0].nome,
+          email_parceiro: parceiro[0].email,
+          fone_parceiro: parceiro[0].fone,
+          casal_formado: 1
+        }
+
+        const token = createToken(user)
+        return callback(null, {
+          token,
+          userData: user
+        })
+      } else {
+        //Login do usuário secundário
+        const id_parceiro = casal[0].usuario_princ
+        const queryParceiro = `SELECT * FROM usuario where id = ?`;
+        const parceiro = await new Promise((resolve, reject) => {
+          pool.query(queryParceiro, [id_parceiro], (err, results) => {
+            if (err) {
+              reject(err)
+            } else {
+              resolve(results)
+            }
+          })
+        });
+
+        const user = {
+          id: login[0].id,
+          nome: login[0].nome,
+          email: login[0].email,
+          fone: login[0].fone,
+          sexo: login[0].sexo,
+          cod_casal: casal[0].cod_casal,
+          id_parceiro: id_parceiro,
+          nome_parceiro: parceiro[0].nome,
+          email_parceiro: parceiro[0].email,
+          fone_parceiro: parceiro[0].fone,
+          casal_formado: 1
+        }
+
+        const token = createToken(user)
+        return callback(null, {
+          token,
+          userData: user
+        })
+      }
+      //Casal ainda não formado
+    } else {
+      const user = {
+        id: login[0].id,
+        nome: login[0].nome,
+        email: login[0].email,
+        fone: login[0].fone,
+        sexo: login[0].sexo,
+        cod_casal: casal[0].cod_casal,
+        casal_formado: 0
+      }
+
+      const token = createToken(user)
+      return callback(null, {
+        token,
+        userData: user
+      })
+    }
+
+
+  }
 }
 
 //Criar lógica para excluir dados do BD
