@@ -16,8 +16,8 @@ export const autenticarJWT = (req, res, next) => {
     });
 }
 
-export const createToken = (payload) => {
+export const createToken = (payload, expiresIn = null) => {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES
+    expiresIn: expiresIn ? expiresIn : JWT_EXPIRES 
   })
 }

@@ -63,12 +63,14 @@ const vincCadastro = (req, res) => {
 };
 
 //Sem autenticação
-const buscaCadastroEmail = (req, res) => {
+const gerarToken = (req, res) => {
   const fone = req.header('fone');
+  const tipo = req.header('tipo') //login ou senha
+  console.log({fone, tipo})
 
-  AuthModel.buscaCadastroEmail(fone, (err, results) => {
+  AuthModel.gerarToken({ fone, tipo }, (err, results) => {
     if (err) {
-      console.error('Erro ao encontrar cadastro');
+      console.error('Erro ao encontrar cadastro', err);
       return res.status(500).json({ error: 'Erro ao encontrar cadastro' });
     } else if (!results) {
       return ({ message: 'Não foi possível encontrar o usuário' })
@@ -81,8 +83,10 @@ const buscaCadastroEmail = (req, res) => {
 const validaToken = (req, res) => {
   const token = req.header('token');
   const uuid = req.header('uuid');
+  const tipo = req.header('tipo') // login ou senha
+  const fone = req.header('fone') //Para caso a validação seja para o acesso pelo WhatsApp
 
-  AuthModel.validaToken(token, uuid, (err, results) => {
+  AuthModel.validaToken({ fone, token, uuid, tipo }, (err, results) => {
     if (err || results == null) {
       return res.status(500).json({ error: 'Token inválido' });
     }
@@ -153,5 +157,17 @@ const getPerfil = (req, res) => {
   });
 };
 
-export default { cadastroUsuario, loginUsuario, vincCadastro, buscaCadastroEmail, validaToken, mudaSenha, editUser, validaVinculo, getPerfil }
+const verificaWhats = (req, res) => {
+  const { fone } = req.query
+
+  AuthModel.verificaWhats(fone, (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: `Não foi possível validar seu whatsapp.`, err })
+    }
+
+    return res.status(200).json({ message: 'Validado com sucesso', results })
+  })
+}
+
+export default { cadastroUsuario, loginUsuario, vincCadastro, gerarToken, validaToken, mudaSenha, editUser, validaVinculo, getPerfil, verificaWhats }
 

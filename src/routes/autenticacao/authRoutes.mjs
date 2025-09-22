@@ -7,11 +7,12 @@ authRouter.post('/cadastro', authController.cadastroUsuario)
 //authRouter.get('/buscaCadastro', authController.buscaCadastro)
 authRouter.put('/vincCadastro', authController.vincCadastro)
 authRouter.post('/login', authController.loginUsuario)
-authRouter.get('/buscaCadEmail', authController.buscaCadastroEmail)
+authRouter.get('/buscaCadEmail', authController.gerarToken)
 authRouter.put('/mudaSenha', authController.mudaSenha)
 authRouter.get('/validaToken', authController.validaToken)
 authRouter.put('/editCadastro', autenticarJWT, authController.editUser)
 authRouter.get('/validaVinculo', authController.validaVinculo)
 authRouter.get('/getPerfil', autenticarJWT, authController.getPerfil)
+authRouter.get('/verificaWhats', authController.verificaWhats)
 
 export default authRouter;
