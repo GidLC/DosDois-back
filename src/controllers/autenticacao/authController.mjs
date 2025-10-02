@@ -158,9 +158,9 @@ const getPerfil = (req, res) => {
 };
 
 const verificaWhats = (req, res) => {
-  const { fone } = req.query
+  const { fone, origem, idUser } = req.query
 
-  AuthModel.verificaWhats(fone, (err, results) => {
+  AuthModel.verificaWhats(fone, origem, idUser, (err, results) => {
     if (err) {
       return res.status(500).json({ message: `Não foi possível validar seu whatsapp.`, err })
     }

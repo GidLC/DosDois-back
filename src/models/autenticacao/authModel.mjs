@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { formataDataBr } from "../../data/formataDataBR/formataDataBR.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -248,9 +249,9 @@ class AuthModel {
       })
 
       //registra login do usuário
-      const queryDataLogin = 'UPDATE usuario SET ultimo_acesso = ? WHERE id = ?';
+      const queryDataLogin = 'UPDATE usuario SET ultimo_acesso = NOW() WHERE id = ?';
       await new Promise((resolve, reject) => {
-        pool.query(queryDataLogin, [hoje, login[0].id], (err, results) => {
+        pool.query(queryDataLogin, [login[0].id], (err, results) => {
           if (err) {
             reject(err)
           } else {
@@ -258,6 +259,23 @@ class AuthModel {
           }
         })
       })
+
+      //Verifica se há pendência relacionada a validação do WhatsApp
+      let whatsPend = false
+      const queryVerificaWhats = 'SELECT * FROM senha_temp WHERE id_usuario = ? AND tipo = ? AND validade > NOW()'
+      const whats = await new Promise((resolve, reject) => {
+        pool.query(queryVerificaWhats, [login[0].id, "login"], (err, results) => {
+          if (err) {
+            reject(err)
+          } else {
+            resolve(results)
+          }
+        })
+      })
+
+      if (whats.length > 0 && login[0].whats_verificado == 0) {
+        whatsPend = true
+      }
 
       //Casal formado
       if (casal[0].usuario_sec !== null) {
@@ -286,7 +304,8 @@ class AuthModel {
             nome_parceiro: parceiro[0].nome,
             email_parceiro: parceiro[0].email,
             fone_parceiro: parceiro[0].fone,
-            casal_formado: 1
+            casal_formado: 1,
+            whatsPend
           }
 
           const token = createToken(user)
@@ -319,7 +338,8 @@ class AuthModel {
             nome_parceiro: parceiro[0].nome,
             email_parceiro: parceiro[0].email,
             fone_parceiro: parceiro[0].fone,
-            casal_formado: 1
+            casal_formado: 1,
+            whatsPend
           }
 
           const token = createToken(user)
@@ -337,7 +357,8 @@ class AuthModel {
           fone: login[0].fone,
           sexo: login[0].sexo,
           cod_casal: casal[0].cod_casal,
-          casal_formado: 0
+          casal_formado: 0,
+          whatsPend
         }
 
         const token = createToken(user)
@@ -361,7 +382,7 @@ class AuthModel {
       const data = new Date()
       const validade = new Date(data.getTime() + 2 * 60 * 60 * 1000).toISOString();
       const v = await separaData(validade)
-      const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
+      const momento = `${v.ano}-${v.mes + 1}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
 
       const queryUsuario = `SELECT * FROM usuario WHERE fone = ?`;
       const buscaUsuario = await new Promise((resolve, reject) => {
@@ -578,7 +599,7 @@ class AuthModel {
 
 
     } catch (error) {
-      console.log(`Não foi possível validar as informações.${error} `)
+      console.error(`Não foi possível validar as informações.${error} `)
       return callback(error, null)
     }
   }
@@ -600,11 +621,13 @@ class AuthModel {
     });
   };
 
-  static verificaWhats = async (fone, callback) => {
-    const queryLogin = `SELECT * FROM usuario where fone = ?`;
+  //Função para verificar se o WhatsApp do usuário está verificado e atualizar os dados do usuário no APP
+  //A variavel origem indica se a origem da requisição foi o APP ou o WhatsApp
+  static verificaWhats = async (fone, origem, idUser, callback) => {
+    const queryLogin = `SELECT * FROM usuario where ${origem != "app" ? `fone = ?` : `id = ?`}`;
 
     const login = await new Promise((resolve, reject) => {
-      pool.query(queryLogin, [`+${fone}`], (err, results) => {
+      pool.query(queryLogin, [origem == "app" ? idUser : `+${fone}`], (err, results) => {
         if (err) {
           reject(err)
         }
@@ -642,6 +665,23 @@ class AuthModel {
       })
     })*/
 
+    //Verifica se há pendência relacionada a validação do WhatsApp
+    let whatsPend = false
+    const queryVerificaWhats = 'SELECT * FROM senha_temp WHERE id_usuario = ? AND tipo = ? AND validade > NOW()'
+    const whats = await new Promise((resolve, reject) => {
+      pool.query(queryVerificaWhats, [login[0].id, "login"], (err, results) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(results)
+        }
+      })
+    })
+
+    if (whats.length > 0 && login[0].whats_verificado == 0) {
+      whatsPend = true
+    }
+
     //Casal formado
     if (casal[0].usuario_sec !== null) {
       //Login do usuário principal
@@ -669,7 +709,8 @@ class AuthModel {
           nome_parceiro: parceiro[0].nome,
           email_parceiro: parceiro[0].email,
           fone_parceiro: parceiro[0].fone,
-          casal_formado: 1
+          casal_formado: 1,
+          whatsPend
         }
 
         const token = createToken(user)
@@ -702,7 +743,8 @@ class AuthModel {
           nome_parceiro: parceiro[0].nome,
           email_parceiro: parceiro[0].email,
           fone_parceiro: parceiro[0].fone,
-          casal_formado: 1
+          casal_formado: 1,
+          whatsPend
         }
 
         const token = createToken(user)
@@ -720,7 +762,8 @@ class AuthModel {
         fone: login[0].fone,
         sexo: login[0].sexo,
         cod_casal: casal[0].cod_casal,
-        casal_formado: 0
+        casal_formado: 0,
+        whatsPend
       }
 
       const token = createToken(user)
