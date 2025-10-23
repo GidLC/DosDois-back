@@ -1,4 +1,4 @@
-import { pool } from "../../config/config.mjs";
+﻿import { pool } from "../../config/config.mjs";
 import * as crypto from 'crypto'
 import enviaEmail from "../../data/enviaEmail/enviaEmail.mjs";
 import EmailParceiro from "../../data/emails/Cadastro/EmailParceiro.mjs";
@@ -248,9 +248,9 @@ class AuthModel {
       })
 
       //registra login do usuário
-      const queryDataLogin = 'UPDATE usuario SET ultimo_acesso = ? WHERE id = ?';
+      const queryDataLogin = 'UPDATE usuario SET ultimo_acesso = NOW() WHERE id = ?';
       await new Promise((resolve, reject) => {
-        pool.query(queryDataLogin, [hoje, login[0].id], (err, results) => {
+        pool.query(queryDataLogin, [login[0].id], (err, results) => {
           if (err) {
             reject(err)
           } else {
