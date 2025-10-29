@@ -1,2 +1,2 @@
-# OneCash-back
- Back-End da aplicação de TCC OneCash em Node+Express.js
+# DosDois-back
+ Back-End da aplicação de TCC DosDois(antigo OneCash) em Node+Express.js

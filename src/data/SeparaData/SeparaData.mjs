@@ -1,4 +1,4 @@
-import { DateTime } from 'luxon'
+﻿import { DateTime } from 'luxon'
 
 const separaData = async (data) => {
     const date = new Date(data) //Adiciona 3 horas para o GMT 0

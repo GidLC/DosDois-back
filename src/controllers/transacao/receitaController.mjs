@@ -1,4 +1,4 @@
-import ReceitaModel from "../../models/transacoes/receitaModel.mjs";
+﻿import ReceitaModel from "../../models/transacoes/receitaModel.mjs";
 
 const addReceita = (req, res) => {
   const { descricao, valor, categoria, status, data, banco, tipo, fixa, tag, obs, repetir } = req.body;
@@ -79,9 +79,7 @@ const editReceitaFixa = (req, res) => {
 const deleteReceita = (req, res) => {
   const casal = req.header('auth');
   const usuario = req.header('usuario');
-  const id = req.header('id');
-  const id_fixo = req.header('id_fixo')
-  const pend = req.header('pend')
+  const { id, id_fixo, pend } = req.body
 
   ReceitaModel.deleteReceita(id, usuario, casal, pend, id_fixo, (err, results) => {
     if (err) {
