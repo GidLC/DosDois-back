@@ -165,7 +165,7 @@ class ReceitaModel {
     static editReceita = async (casal, tipo, id, descricao, categoria, valor, data, status, tag, obs, fixa, banco, callback) => {
         const tabela = (fixa == 0 || !fixa) ? 'receita' : 'receitas_fixas';
         const query = `UPDATE ${tabela} SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ?, banco = ? WHERE casal = ? AND id = ?`
-        const objData = await SeparaData(data)
+        const objData = await SeparaData(data, true)
         pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, casal, id], (err, results) => {
             if (err) {
                 return callback(err, null)
@@ -177,7 +177,7 @@ class ReceitaModel {
     //Função para editar todas receitas fixas ou pendentes
     static editReceitaFixa = async (casal, id_fixo, descricao, categoria, valor, data, tipo, pendentes, tag, obs, callback) => {
         const query = `UPDATE receitas_fixas SET descricao = ?, categoria = ?, valor = ?, dia = ?, tipo = ?, tag = ?, obs = ? WHERE casal = ? AND id_fixo = ? ${parseInt(pendentes) == 1 ? `AND status = 0` : ``}`;
-        const objData = await SeparaData(data);
+        const objData = await SeparaData(data, true);
 
         pool.query(query, [descricao, categoria, valor, objData.dia, tipo, tag, obs, casal, id_fixo], (err, results) => {
             if (err) {
@@ -192,16 +192,19 @@ class ReceitaModel {
         let tabela
         let params
         let query
+
         //Excluir todas as receitas fixas
         if (id_fixo != undefined && Number(pend) != 1) {
             query = `DELETE FROM receitas_fixas WHERE id_fixo = ? AND casal = ?`
             params = [id_fixo, casal]
         } else {
-            tabela = (!id_fixo || id_fixo == undefined) ? 'receita' : 'receitas_fixas'
+            tabela = (!id_fixo || id_fixo == undefined || id_fixo == 'undefined') ? 'receita' : 'receitas_fixas'
             //Exclui apenas as pendentes
             params = (Number(pend) == 1) ? [id_fixo, usuario, casal] : [id, usuario, casal]
             query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND usuario = ? AND casal = ?`
         }
+
+        console.log(query)
 
         pool.query(query, params, (err, results) => {
             if (err) {

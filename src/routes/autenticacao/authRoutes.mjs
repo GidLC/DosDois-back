@@ -14,5 +14,6 @@ authRouter.put('/editCadastro', autenticarJWT, authController.editUser)
 authRouter.get('/validaVinculo', authController.validaVinculo)
 authRouter.get('/getPerfil', autenticarJWT, authController.getPerfil)
 authRouter.get('/verificaWhats', authController.verificaWhats)
+authRouter.get('/atualizaUser', autenticarJWT, authController.atualizaUsuario)
 
 export default authRouter;

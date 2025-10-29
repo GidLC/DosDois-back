@@ -44,7 +44,6 @@ class CategoriaTrModel {
             } else if (results.length == 0) {
                 return callback("Nenhum registro foi encontrado", null)
             }
-            console.log(results)
 
             return callback(null, results[0])
         })

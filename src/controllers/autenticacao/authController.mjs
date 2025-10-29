@@ -66,7 +66,7 @@ const vincCadastro = (req, res) => {
 const gerarToken = (req, res) => {
   const fone = req.header('fone');
   const tipo = req.header('tipo') //login ou senha
-  console.log({fone, tipo})
+  console.log({ fone, tipo })
 
   AuthModel.gerarToken({ fone, tipo }, (err, results) => {
     if (err) {
@@ -152,15 +152,14 @@ const getPerfil = (req, res) => {
       return res.status(404).send("Imagem não encontrada");
     }
 
-    console.log(caminhoCompleto)
     return res.sendFile(caminhoCompleto);
   });
 };
 
 const verificaWhats = (req, res) => {
-  const { fone } = req.query
+  const { fone, origem, idUser } = req.query
 
-  AuthModel.verificaWhats(fone, (err, results) => {
+  AuthModel.verificaWhats(fone, origem, idUser, (err, results) => {
     if (err) {
       return res.status(500).json({ message: `Não foi possível validar seu whatsapp.`, err })
     }
@@ -169,5 +168,20 @@ const verificaWhats = (req, res) => {
   })
 }
 
-export default { cadastroUsuario, loginUsuario, vincCadastro, gerarToken, validaToken, mudaSenha, editUser, validaVinculo, getPerfil, verificaWhats }
+const atualizaUsuario = (req, res) => {
+  const { idUser } = req.query
+
+  AuthModel.atualizaUsuario(idUser, (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: `Não foi possível atualizar as informações.`, err })
+    }
+
+    return res.status(200).json({ message: 'Atualizado com sucesso', results })
+  })
+}
+
+export default {
+  cadastroUsuario, loginUsuario, vincCadastro, gerarToken, validaToken,
+  mudaSenha, editUser, validaVinculo, getPerfil, verificaWhats, atualizaUsuario
+}
 

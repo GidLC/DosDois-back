@@ -10,11 +10,90 @@ import fs from 'fs';
 import path from 'path';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { formataDataBr } from "../../data/formataDataBR/formataDataBR.mjs";
+import { formataFone } from "../../data/formataFone/formataFone.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-class AuthModel {
+const getUserData = async (usuario) => {
+  //Verifica casal
+  const [casal] = await new Promise((resolve, reject) => {
+    const query = 'SELECT * FROM casal WHERE usuario_princ = ? OR usuario_sec = ?';
+    pool.query(query, [usuario.id, usuario.id], (err, results) => {
+      if (err) reject(err);
+      else resolve(results);
+    });
+  });
 
+  //Verifica pendência de WhatsApp
+  let whatsPend = false;
+  const queryWhats = 'SELECT * FROM senha_temp WHERE id_usuario = ? AND tipo = ? AND validade > NOW()';
+  const whats = await new Promise((resolve, reject) => {
+    pool.query(queryWhats, [usuario.id, 'login'], (err, results) => {
+      if (err) reject(err);
+      else resolve(results);
+    });
+  });
+
+  if (whats.length > 0 && usuario.whats_verificado == 0) {
+    whatsPend = true;
+  }
+
+  // Caso o usuário ainda não tenha casal
+  if (!casal || casal.usuario_sec === null) {
+    const userData = {
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      fone: usuario.fone,
+      sexo: usuario.sexo,
+      cod_casal: casal?.cod_casal || null,
+      casal_formado: 0,
+      whatsPend,
+    };
+    const token = createToken(userData);
+    return { token, userData };
+  }
+
+  // Identifica parceiro
+  const idParceiro = usuario.id == casal.usuario_princ ? casal.usuario_sec : casal.usuario_princ;
+  const [parceiro] = await new Promise((resolve, reject) => {
+    pool.query('SELECT * FROM usuario WHERE id = ?', [idParceiro], (err, results) => {
+      if (err) reject(err);
+      else resolve(results);
+    });
+  });
+
+  const userData = {
+    id: usuario.id,
+    nome: usuario.nome,
+    email: usuario.email,
+    fone: usuario.fone,
+    sexo: usuario.sexo,
+    cod_casal: casal.cod_casal,
+    id_parceiro: idParceiro,
+    nome_parceiro: parceiro?.nome,
+    email_parceiro: parceiro?.email,
+    fone_parceiro: parceiro?.fone,
+    casal_formado: 1,
+    whatsPend,
+  };
+
+  const token = createToken(userData);
+  return { token, userData };
+}
+
+const updateLastAccess = async (idUsuario) => {
+  const query = 'UPDATE usuario SET ultimo_acesso = NOW() WHERE id = ?';
+  await new Promise((resolve, reject) => {
+    pool.query(query, [idUsuario], (err, results) => {
+      if (err) reject(err);
+      else resolve(results);
+    });
+  });
+}
+
+class AuthModel {
   static cadastroUsuario = async (nome, email, senha, fone, dt_criacao, sexo, callback) => {
     try {
       //Cria código exclusivo do casal
@@ -124,22 +203,6 @@ class AuthModel {
     }
   }
 
-
-  //Busca cadastro do parceiro para realizar a vinculação (ANTIGO)
-  /*static buscaCadastro(codigo, callback) {
-    const query = 'SELECT user.nome, user.id, casal.usuario_sec FROM usuario AS user INNER JOIN casal ON casal.usuario_princ = user.id WHERE casal = ?';
-    pool.query(query, [codigo], (err, results) => {
-      if (err) {
-        return callback(err, null);
-      } else if (results.length === 0) {
-        return callback(null, 0);
-      } else if (results[0].usuario_sec != null) {
-        return callback(null, 1);
-      }
-      callback(null, results[0]);
-    });
-  }*/
-
   //Realizar uma validação de vinculação mais segura, como solicitar o email do parceiro principal
   static vincCadastro = async (nome, email, senha, cod_casal, fone, sexo, uuid, callback) => {
     try {
@@ -216,139 +279,24 @@ class AuthModel {
 
   static loginUsuario = async (email, senha, callback) => {
     try {
-      const senhaHash = crypto.createHash('sha256').update(senha).digest('hex')
-      const data = new Date()
-      const hoje = data.toISOString()
+      const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
 
-      //Verifica a existência do usuário
-      const queryLogin = `SELECT * FROM usuario where email = ? AND senha = ?`;
-      const login = await new Promise((resolve, reject) => {
-        pool.query(queryLogin, [email, senhaHash], (err, results) => {
-          if (err) {
-            reject(err)
-          } else if (results.length == 0) {
-            err = `Usuário não encontrado`
-            return callback(err, null)
-          } else {
-            resolve(results)
-          }
-        })
-      })
+      const [usuario] = await new Promise((resolve, reject) => {
+        const query = 'SELECT * FROM usuario WHERE email = ? AND senha = ?';
+        pool.query(query, [email, senhaHash], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
+        });
+      });
 
-      //Verifica a existência de uma casal vinculado ao usuário
-      const queryCasal = `SELECT * FROM casal WHERE usuario_princ = ? OR usuario_sec = ?`;
-      const casal = await new Promise((resolve, reject) => {
-        pool.query(queryCasal, [login[0].id, login[0].id], (err, results) => {
-          if (err) {
-            reject(err)
-          } else {
-            resolve(results)
-          }
-        })
-      })
+      if (!usuario) return callback('Usuário não encontrado', null);
 
-      //registra login do usuário
-      const queryDataLogin = 'UPDATE usuario SET ultimo_acesso = NOW() WHERE id = ?';
-      await new Promise((resolve, reject) => {
-        pool.query(queryDataLogin, [login[0].id], (err, results) => {
-          if (err) {
-            reject(err)
-          } else {
-            resolve(results)
-          }
-        })
-      })
-
-      //Casal formado
-      if (casal[0].usuario_sec !== null) {
-        //Login do usuário principal
-        if (login[0].id == casal[0].usuario_princ) {
-          const id_parceiro = casal[0].usuario_sec
-          const queryParceiro = `SELECT * FROM usuario where id = ?`;
-          const parceiro = await new Promise((resolve, reject) => {
-            pool.query(queryParceiro, [id_parceiro], (err, results) => {
-              if (err) {
-                reject(err)
-              } else {
-                resolve(results)
-              }
-            })
-          });
-
-          const user = {
-            id: login[0].id,
-            nome: login[0].nome,
-            email: login[0].email,
-            fone: login[0].fone,
-            sexo: login[0].sexo,
-            cod_casal: casal[0].cod_casal,
-            id_parceiro: id_parceiro,
-            nome_parceiro: parceiro[0].nome,
-            email_parceiro: parceiro[0].email,
-            fone_parceiro: parceiro[0].fone,
-            casal_formado: 1
-          }
-
-          const token = createToken(user)
-          return callback(null, {
-            token,
-            userData: user
-          })
-        } else {
-          //Login do usuário secundário
-          const id_parceiro = casal[0].usuario_princ
-          const queryParceiro = `SELECT * FROM usuario where id = ?`;
-          const parceiro = await new Promise((resolve, reject) => {
-            pool.query(queryParceiro, [id_parceiro], (err, results) => {
-              if (err) {
-                reject(err)
-              } else {
-                resolve(results)
-              }
-            })
-          });
-
-          const user = {
-            id: login[0].id,
-            nome: login[0].nome,
-            email: login[0].email,
-            fone: login[0].fone,
-            sexo: login[0].sexo,
-            cod_casal: casal[0].cod_casal,
-            id_parceiro: id_parceiro,
-            nome_parceiro: parceiro[0].nome,
-            email_parceiro: parceiro[0].email,
-            fone_parceiro: parceiro[0].fone,
-            casal_formado: 1
-          }
-
-          const token = createToken(user)
-          return callback(null, {
-            token,
-            userData: user
-          })
-        }
-        //Casal ainda não formado
-      } else {
-        const user = {
-          id: login[0].id,
-          nome: login[0].nome,
-          email: login[0].email,
-          fone: login[0].fone,
-          sexo: login[0].sexo,
-          cod_casal: casal[0].cod_casal,
-          casal_formado: 0
-        }
-
-        const token = createToken(user)
-        return callback(null, {
-          token,
-          userData: user
-        })
-      }
+      await updateLastAccess(usuario.id);
+      const result = await getUserData(usuario);
+      return callback(null, result);
     } catch (error) {
-      console.error(`Houve um erro ao realizar o login. ${error}`)
-      return callback(error, null)
+      console.error(`Erro no login: ${error}`);
+      return callback(error, null);
     }
   }
 
@@ -361,7 +309,7 @@ class AuthModel {
       const data = new Date()
       const validade = new Date(data.getTime() + 2 * 60 * 60 * 1000).toISOString();
       const v = await separaData(validade)
-      const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
+      const momento = `${v.ano}-${v.mes + 1}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
 
       const queryUsuario = `SELECT * FROM usuario WHERE fone = ?`;
       const buscaUsuario = await new Promise((resolve, reject) => {
@@ -400,7 +348,7 @@ class AuthModel {
       } else if (tipo === "login") {
         enviaWhats(
           buscaUsuario[0].fone,
-          `Seu código de autenticação no app *DosDois* é: *${token}*, no menu *CONTA* selecione a opção *VALIDAR WHATS* para autenticar-se.`
+          `Seu código de autenticação no app *DosDois* é: *${token}*, faça LOGIN no APP e verifique suas pendências.`
         );
       }
 
@@ -412,6 +360,7 @@ class AuthModel {
   };
 
   static validaToken = async ({ fone, token, uuid, tipo }, callback) => {
+    console.log({ fone, token, uuid, tipo })
     const data = new Date();
     const v = await separaData(data);
     const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`;
@@ -426,7 +375,7 @@ class AuthModel {
       JOIN usuario u ON u.id = st.id_usuario
       WHERE u.fone = ? AND st.token = ? AND st.tipo = ?
     `;
-      params = [`+${fone}`, token, tipo];
+      params = [formataFone(fone), token, tipo];
     }
 
     const temp = await new Promise((resolve, reject) => {
@@ -578,7 +527,7 @@ class AuthModel {
 
 
     } catch (error) {
-      console.log(`Não foi possível validar as informações.${error} `)
+      console.error(`Não foi possível validar as informações.${error} `)
       return callback(error, null)
     }
   }
@@ -600,137 +549,45 @@ class AuthModel {
     });
   };
 
-  static verificaWhats = async (fone, callback) => {
-    const queryLogin = `SELECT * FROM usuario where fone = ?`;
-
-    const login = await new Promise((resolve, reject) => {
-      pool.query(queryLogin, [`+${fone}`], (err, results) => {
-        if (err) {
-          reject(err)
-        }
-        resolve(results)
-      })
-    })
-
-    if (login.length == 0) {
-      return callback(`nao_encontrado`, null)
-    } else if (login[0].whats_verificado == 0) {
-      return callback(`nao_verificado`, null)
-    }
-
-    //Verifica a existência de uma casal vinculado ao usuário
-    const queryCasal = `SELECT * FROM casal WHERE usuario_princ = ? OR usuario_sec = ?`;
-    const casal = await new Promise((resolve, reject) => {
-      pool.query(queryCasal, [login[0].id, login[0].id], (err, results) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve(results)
-        }
-      })
-    })
-
-    //registra login do usuário
-    /*const queryDataLogin = 'UPDATE usuario SET ultimo_acesso = ? WHERE id = ?';
-    await new Promise((resolve, reject) => {
-      pool.query(queryDataLogin, [hoje, login[0].id], (err, results) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve(results)
-        }
-      })
-    })*/
-
-    //Casal formado
-    if (casal[0].usuario_sec !== null) {
-      //Login do usuário principal
-      if (login[0].id == casal[0].usuario_princ) {
-        const id_parceiro = casal[0].usuario_sec
-        const queryParceiro = `SELECT * FROM usuario where id = ?`;
-        const parceiro = await new Promise((resolve, reject) => {
-          pool.query(queryParceiro, [id_parceiro], (err, results) => {
-            if (err) {
-              reject(err)
-            } else {
-              resolve(results)
-            }
-          })
+  //Função para verificar se o WhatsApp do usuário está verificado
+  //A variavel origem indica se a origem da requisição foi o APP ou o WhatsApp
+  static async verificaWhats(fone, origem, idUser, callback) {
+    try {
+      const query = `SELECT * FROM usuario WHERE ${origem !== 'app' ? 'fone = ?' : 'id = ?'}`;
+      const [usuario] = await new Promise((resolve, reject) => {
+        pool.query(query, [origem === 'app' ? idUser : `+${fone}`], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
         });
+      });
 
-        const user = {
-          id: login[0].id,
-          nome: login[0].nome,
-          email: login[0].email,
-          fone: login[0].fone,
-          sexo: login[0].sexo,
-          cod_casal: casal[0].cod_casal,
-          id_parceiro: id_parceiro,
-          nome_parceiro: parceiro[0].nome,
-          email_parceiro: parceiro[0].email,
-          fone_parceiro: parceiro[0].fone,
-          casal_formado: 1
-        }
+      if (!usuario) return callback('nao_encontrado', null);
+      if (usuario.whats_verificado == 0) return callback('nao_verificado', null);
 
-        const token = createToken(user)
-        return callback(null, {
-          token,
-          userData: user
-        })
-      } else {
-        //Login do usuário secundário
-        const id_parceiro = casal[0].usuario_princ
-        const queryParceiro = `SELECT * FROM usuario where id = ?`;
-        const parceiro = await new Promise((resolve, reject) => {
-          pool.query(queryParceiro, [id_parceiro], (err, results) => {
-            if (err) {
-              reject(err)
-            } else {
-              resolve(results)
-            }
-          })
-        });
-
-        const user = {
-          id: login[0].id,
-          nome: login[0].nome,
-          email: login[0].email,
-          fone: login[0].fone,
-          sexo: login[0].sexo,
-          cod_casal: casal[0].cod_casal,
-          id_parceiro: id_parceiro,
-          nome_parceiro: parceiro[0].nome,
-          email_parceiro: parceiro[0].email,
-          fone_parceiro: parceiro[0].fone,
-          casal_formado: 1
-        }
-
-        const token = createToken(user)
-        return callback(null, {
-          token,
-          userData: user
-        })
-      }
-      //Casal ainda não formado
-    } else {
-      const user = {
-        id: login[0].id,
-        nome: login[0].nome,
-        email: login[0].email,
-        fone: login[0].fone,
-        sexo: login[0].sexo,
-        cod_casal: casal[0].cod_casal,
-        casal_formado: 0
-      }
-
-      const token = createToken(user)
-      return callback(null, {
-        token,
-        userData: user
-      })
+      const result = await getUserData(usuario);
+      return callback(null, result);
+    } catch (error) {
+      console.error(`Erro na verificação de WhatsApp: ${error}`);
+      return callback(error, null);
     }
+  }
 
+  static async atualizaUsuario(idUser, callback) {
+    try {
+      const [usuario] = await new Promise((resolve, reject) => {
+        pool.query('SELECT * FROM usuario WHERE id = ?', [idUser], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
+        });
+      });
 
+      if (!usuario) return callback('Usuário não encontrado', null);
+      const result = await getUserData(usuario);
+      return callback(null, result);
+    } catch (error) {
+      console.error(`Erro ao atualizar usuário: ${error}`);
+      return callback(error, null);
+    }
   }
 }
 
