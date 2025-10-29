@@ -381,7 +381,7 @@ class DespesaModel {
     static editDespesa = async (casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco, callback) => {
         const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
         const query = `UPDATE ${tabela} SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ?, banco = ? WHERE casal = ? AND id = ?`
-        const objData = await SeparaData(data)
+        const objData = await SeparaData(data, true)
         pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, casal, id], (err, results) => {
             if (err) {
                 return callback(err, null)
@@ -395,7 +395,7 @@ class DespesaModel {
     //Função para editar todas despesas fixas e pendentes
     static editDespesaFixa = async (casal, id_fixo, descricao, categoria, valor, data, tipo, pendentes, tag, obs, callback) => {
         const query = `UPDATE despesas_fixas SET descricao = ?, categoria = ?, valor = ?, dia = ?, tipo = ?, tag = ?, obs = ? WHERE casal = ? AND id_fixo = ? ${parseInt(pendentes) ? `AND status = 0` : ``}`;
-        const objData = await SeparaData(data);
+        const objData = await SeparaData(data, true);
 
         pool.query(query, [descricao, categoria, valor, objData.dia, tipo, tag, obs, casal, id_fixo], (err, results) => {
             if (err) {
