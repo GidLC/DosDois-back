@@ -93,115 +93,117 @@ const updateLastAccess = async (idUsuario) => {
   });
 }
 
+const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
+  // Cria código exclusivo do casal
+  const codigoCasal = crypto.randomBytes(3).toString("hex");
+  const senhaHash = senha
+    ? crypto.createHash("sha256").update(senha).digest("hex")
+    : null;
+
+  // 1️⃣ Cria usuário
+  const queryUsuario = `
+    INSERT INTO usuario (nome, email, ${senha ? "senha," : ""} casal, dt_criacao, fone, sexo, foto)
+    VALUES (?, ?, ${senha ? "?," : ""} ?, NOW(), ?, ?, ?)
+  `;
+
+  const usuario = await new Promise((resolve, reject) => {
+    pool.query(
+      queryUsuario,
+      senha
+        ? [nome, email, senhaHash, codigoCasal, fone, sexo, foto]
+        : [nome, email, codigoCasal, fone, sexo, foto],
+      (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      }
+    );
+  });
+
+  const userId = usuario.insertId;
+
+  // 2️⃣ Cria casal
+  await new Promise((resolve, reject) => {
+    pool.query(
+      "INSERT INTO casal (cod_casal, usuario_princ) VALUES (?, ?)",
+      [codigoCasal, userId],
+      (err, results) => (err ? reject(err) : resolve(results))
+    );
+  });
+
+  // 3️⃣ Insere categorias padrões
+  const queryCategoria = `
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Alimentação", 0, 2, 21, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Moradia", 0, 3, 27, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Transporte", 0, 4, 16, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Saúde", 0, 5, 29, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Educação", 0, 6, 11, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Lazer", 0, 7, 28, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Roupas e Acessórios", 0, 8, 33, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Água/Luz/Internet", 0, 9, 39, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Despesas Diversas", 0, 10, 36, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, cat_sistema) VALUES("*Ajuste*",0, 2, 36, ?, 1);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Salário", 1, 11, 38, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Rendimentos", 1, 12, 37, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Presentes", 1, 13, 26, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Receitas Diversas", 1, 14, 31, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, cat_sistema) VALUES("*Ajuste*",1, 3, 37, ?, 1);
+  `;
+
+  const queries = queryCategoria.split(";").filter((q) => q.trim() !== "");
+  await Promise.all(
+    queries.map(
+      (query) =>
+        new Promise((resolve, reject) => {
+          pool.query(query, [codigoCasal], (err, results) =>
+            err ? reject(err) : resolve(results)
+          );
+        })
+    )
+  );
+
+  // 4️⃣ Cria conta Carteira
+  await new Promise((resolve, reject) => {
+    pool.query(
+      "INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ('Carteira', 0, 0, ?, ?)",
+      [codigoCasal, userId],
+      (err, results) => (err ? reject(err) : resolve(results))
+    );
+  });
+
+  // 5️⃣ Cria vínculo e envia notificações
+  const uuid = crypto.randomUUID();
+  const url = `https://dosdoisapp.com.br/atribuicao/${codigoCasal}/${uuid}`;
+  await new Promise((resolve, reject) => {
+    pool.query(
+      "INSERT INTO vinculos (casal, uuid) VALUES (?, ?)",
+      [codigoCasal, uuid],
+      (err, results) => (err ? reject(err) : resolve(results))
+    );
+  });
+
+  if (email) {
+    await enviaEmail(email, "Cadastro no DosDois", EmailCadastro(nome, codigoCasal, url));
+  }
+  if (fone) {
+    await enviaWhats(
+      fone,
+      `Bem-vindo ao app *DosDois*! Para que seu parceiro se vincule a você, acesse: ${url}`
+    );
+  }
+
+  return { id: userId, nome, email, casal: codigoCasal };
+}
+
 class AuthModel {
   static cadastroUsuario = async (nome, email, senha, fone, dt_criacao, sexo, callback) => {
     try {
-      //Cria código exclusivo do casal
-      const codigoCasal = crypto.randomBytes(3).toString('hex');
-      const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
-
-      //categorias de despesa padrão: Alimentação, Moradia, transporte, saúde, educação, lazer, roupas e acessórios, água/luz/internet, despesas diversas
-      //categorias de receita padrão: Salário, rendimentos, presentes, receitas diversas
-
-      const queryUsuario = 'INSERT INTO usuario (nome, email, senha, casal, dt_criacao, fone, sexo) VALUES (?, ?, ?, ?, NOW(), ?, ?)';
-
-      //Cria cadastro do usuário principal
-      const usuario = await new Promise((resolve, reject) => {
-        pool.query(queryUsuario, [nome, email, senhaHash, codigoCasal, fone, sexo], async (err, results) => {
-          if (err) {
-            reject(err.errno)
-          }
-
-          resolve(results)
-        });
-      })
-
-      const userId = usuario.insertId;
-
-      //Cria tabela para vínculo do casal
-      const queryCasal = 'INSERT INTO casal (cod_casal, usuario_princ) VALUES (?, ?)';
-      await new Promise((resolve, reject) => {
-        pool.query(queryCasal, [codigoCasal, userId], (err, results) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(results);
-        });
-      });
-
-      //Insere categorias padrões
-      const queryCategoria = `
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Alimentação", 0, 2, 21, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Moradia", 0, 3, 27, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Transporte", 0, 4, 16, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Saúde", 0, 5, 29, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Educação", 0, 6, 11, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Lazer", 0, 7, 28, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Roupas e Acessórios", 0, 8, 33, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Água/Luz/Internet", 0, 9, 39, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Despesas Diversas", 0, 10, 36, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, cat_sistema) VALUES("*Ajuste*",0, 2, 36, ?, 1);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Salário", 1, 11, 38, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Rendimentos", 1, 12, 37, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Presentes", 1, 13, 26, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Receitas Diversas", 1, 14, 31, ?);
-      INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, cat_sistema) VALUES("*Ajuste*",1, 3, 37, ?, 1);
-      `;
-
-      const queries = queryCategoria.split(';').filter(query => query.trim() !== '');
-      await Promise.all(queries.map((query) => {
-        return new Promise((resolve, reject) => {
-          pool.query(query, [codigoCasal], (err, results) => {
-            if (err) {
-              reject(err);
-            }
-            resolve(results);
-          });
-        });
-      }));
-
-      //Cria conta bancárias padrão Carteira
-      const queryBanco = `INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Carteira", 0, 0, ?, ?);`
-
-      await new Promise((resolve, reject) => {
-        pool.query(queryBanco, [codigoCasal, userId], (err, results) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(results);
-        });
-      });
-
-      const uuid = crypto.randomUUID();
-      const url = `https://dosdoisapp.com.br/atribuicao/${codigoCasal}/${uuid}`
-
-      //Adiciona dados para validação da vinculação
-      const queryValidacao = `INSERT INTO vinculos (casal, uuid) VALUES (?, ?)`
-
-      await new Promise((resolve, reject) => {
-        pool.query(queryValidacao, [codigoCasal, uuid], (err, results) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(results);
-        })
-      })
-
-      await enviaEmail(email,
-        "Cadastro no OneCash",
-        EmailCadastro(nome, codigoCasal, url)
-      );
-
-      await enviaWhats(fone, `Bem vindo ao app *DosDois*, para que seu parceiro se vincule a você ele precisa acessar a seguinte URL: ${url}`)
-
-      return callback(null, "Usuário cadastrado")
+      const user = await criarUsuarioBase({ nome, email, senha, fone, sexo, foto: null });
+      return callback(null, "Usuário cadastrado com sucesso");
     } catch (error) {
-      return callback({
-        message: `Houve um erro ao cadastrar o usuário. ${error}`,
-        error
-      }, null)
+      return callback({ message: `Erro ao cadastrar usuário. ${error}` }, null);
     }
-  }
+  };
+
 
   //Realizar uma validação de vinculação mais segura, como solicitar o email do parceiro principal
   static vincCadastro = async (nome, email, senha, cod_casal, fone, sexo, uuid, callback) => {
@@ -589,6 +591,28 @@ class AuthModel {
       return callback(error, null);
     }
   }
+
+  static async loginGoogle (email, nome, foto, callback) {
+    try {
+      const queryBusca = "SELECT * FROM usuario WHERE email = ?";
+      const [rows] = await pool.promise().query(queryBusca, [email]);
+
+      if (rows.length > 0) {
+        const user = rows[0];
+        const { token, userData } = await getUserData(user);
+        return callback(null, { token, userData });
+      }
+
+      // Caso o usuário não exista, cria com base no fluxo padrão
+      const novoUsuario = await criarUsuarioBase({ nome, email, fone: null, sexo: null, senha: null, foto });
+      const { token, userData } = await getUserData(novoUsuario);
+
+      return callback(null, { token, userData });
+    } catch (err) {
+      return callback(err);
+    }
+  };
+
 }
 
 //Criar lógica para excluir dados do BD

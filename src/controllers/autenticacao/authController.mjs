@@ -2,6 +2,9 @@ import AuthModel from "../../models/autenticacao/authModel.mjs";
 import path from "path";
 import fs from "fs";
 
+import { OAuth2Client } from "google-auth-library";
+const client = new OAuth2Client("948441988435-1jfcovgkbnmckon47bvuntfkhhf3nts7.apps.googleusercontent.com");
+
 //Sem autenticação
 const loginUsuario = (req, res) => {
   const { email, senha } = req.body;
@@ -180,8 +183,36 @@ const atualizaUsuario = (req, res) => {
   })
 }
 
+const loginGoogle = async (req, res) => {
+  try {
+    const { tokenGoogle } = req.body;
+
+    // Valida o token com o Google
+    const ticket = await client.verifyIdToken({
+      idToken: tokenGoogle,
+      audience: "948441988435-1jfcovgkbnmckon47bvuntfkhhf3nts7.apps.googleusercontent.com",
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name, picture } = payload;
+
+    AuthModel.loginGoogle(email, name, picture, (err, resultado) => {
+      if (err) {
+        console.error("Erro ao autenticar via Google:", err);
+        return res.status(500).json({ message: `Erro ao autenticar via Google: ${err}` });
+      }
+
+      res.status(200).json({ message: "Autenticação Google realizada com sucesso", resultado });
+    });
+
+  } catch (error) {
+    console.error("Erro ao validar token do Google:", error);
+    res.status(400).json({ message: "Token do Google inválido ou expirado" });
+  }
+};
+
 export default {
   cadastroUsuario, loginUsuario, vincCadastro, gerarToken, validaToken,
-  mudaSenha, editUser, validaVinculo, getPerfil, verificaWhats, atualizaUsuario
+  mudaSenha, editUser, validaVinculo, getPerfil, verificaWhats, atualizaUsuario, loginGoogle
 }
 
