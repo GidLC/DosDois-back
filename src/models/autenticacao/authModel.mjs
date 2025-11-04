@@ -47,6 +47,7 @@ const getUserData = async (usuario) => {
       email: usuario.email,
       fone: usuario.fone,
       sexo: usuario.sexo,
+      incompleto: usuario.incompleto,
       cod_casal: casal?.cod_casal || null,
       casal_formado: 0,
       whatsPend,
@@ -70,6 +71,7 @@ const getUserData = async (usuario) => {
     email: usuario.email,
     fone: usuario.fone,
     sexo: usuario.sexo,
+    incompleto: usuario.incompleto,
     cod_casal: casal.cod_casal,
     id_parceiro: idParceiro,
     nome_parceiro: parceiro?.nome,
@@ -100,7 +102,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
     ? crypto.createHash("sha256").update(senha).digest("hex")
     : null;
 
-  // 1️⃣ Cria usuário
+  // Cria usuário
   const queryUsuario = `
     INSERT INTO usuario (nome, email, ${senha ? "senha," : ""} casal, dt_criacao, fone, sexo, foto)
     VALUES (?, ?, ${senha ? "?," : ""} ?, NOW(), ?, ?, ?)
@@ -121,7 +123,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
 
   const userId = usuario.insertId;
 
-  // 2️⃣ Cria casal
+  // Cria casal
   await new Promise((resolve, reject) => {
     pool.query(
       "INSERT INTO casal (cod_casal, usuario_princ) VALUES (?, ?)",
@@ -130,7 +132,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
     );
   });
 
-  // 3️⃣ Insere categorias padrões
+  // Insere categorias padrões
   const queryCategoria = `
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Alimentação", 0, 2, 21, ?);
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Moradia", 0, 3, 27, ?);
@@ -161,7 +163,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
     )
   );
 
-  // 4️⃣ Cria conta Carteira
+  // Cria conta Carteira
   await new Promise((resolve, reject) => {
     pool.query(
       "INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ('Carteira', 0, 0, ?, ?)",
@@ -170,7 +172,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
     );
   });
 
-  // 5️⃣ Cria vínculo e envia notificações
+  // Cria vínculo e envia notificações
   const uuid = crypto.randomUUID();
   const url = `https://dosdoisapp.com.br/atribuicao/${codigoCasal}/${uuid}`;
   await new Promise((resolve, reject) => {
