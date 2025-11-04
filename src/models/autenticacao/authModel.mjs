@@ -481,8 +481,9 @@ class AuthModel {
       caminhoFoto = `/uploads/perfis/${nomeArquivo}`;
     }
 
-    const query = 'UPDATE usuario SET nome = ?, fone = ?, perfil_url = ? WHERE id = ?'
-    pool.query(query, [nome, fone, String(caminhoFoto), id], (err, results) => {
+    console.log(nome, fone, String(caminhoFoto), false, id)
+    const query = 'UPDATE usuario SET nome = ?, fone = ?, perfil_url = ?, incompleto = ? WHERE id = ?'
+    pool.query(query, [nome, fone, String(caminhoFoto), false, id], (err, results) => {
       if (err) {
         console.error(err)
         return callback(err, null)
