@@ -79,7 +79,9 @@ const editReceitaFixa = (req, res) => {
 const deleteReceita = (req, res) => {
   const casal = req.header('auth');
   const usuario = req.header('usuario');
-  const { id, id_fixo, pend } = req.body
+  const id = req.header('id')
+  const id_fixo = req.header('id_fixo')
+  const pend = req.header('pend')
 
   ReceitaModel.deleteReceita(id, usuario, casal, pend, id_fixo, (err, results) => {
     if (err) {

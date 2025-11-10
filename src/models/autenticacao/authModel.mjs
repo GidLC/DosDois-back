@@ -364,7 +364,6 @@ class AuthModel {
   };
 
   static validaToken = async ({ fone, token, uuid, tipo }, callback) => {
-    console.log({ fone, token, uuid, tipo })
     const data = new Date();
     const v = await separaData(data);
     const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`;
@@ -461,7 +460,9 @@ class AuthModel {
     }
   }
 
-  static editUser = (nome, email, fone, id, foto, callback) => {
+  static editUser = (nome, email, fone, id, foto, senha, sexo, callback) => {
+    const google = (senha && sexo ) ? true : false
+    const senhaHash = google && crypto.createHash('sha256').update(senha).digest('hex');
 
     let caminhoFoto = null;
 
@@ -481,8 +482,13 @@ class AuthModel {
       caminhoFoto = `/uploads/perfis/${nomeArquivo}`;
     }
 
-    const query = 'UPDATE usuario SET nome = ?, fone = ?, perfil_url = ? WHERE id = ?'
-    pool.query(query, [nome, fone, String(caminhoFoto), id], (err, results) => {
+    const query = `UPDATE usuario SET nome = ?, fone = ?, perfil_url = ?, incompleto = NULL${google ? `, senha = ?, sexo = ?` : ` `}WHERE id = ?`
+
+    let params
+
+    if (google) params = [nome, fone, String(caminhoFoto), senhaHash, sexo, id] ?? [nome, fone, String(caminhoFoto), id]
+
+    pool.query(query, params, (err, results) => {
       if (err) {
         console.error(err)
         return callback(err, null)
@@ -594,7 +600,7 @@ class AuthModel {
     }
   }
 
-  static async loginGoogle (email, nome, foto, callback) {
+  static async loginGoogle(email, nome, foto, callback) {
     try {
       const queryBusca = "SELECT * FROM usuario WHERE email = ?";
       const [rows] = await pool.promise().query(queryBusca, [email]);

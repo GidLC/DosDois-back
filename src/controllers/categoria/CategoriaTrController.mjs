@@ -57,9 +57,9 @@ const loadCategoriaTrID = (req, res) => {
 
 const editCategoriaTr = (req, res) => {
     const auth = req.header('auth');
-    const {id, nome, icone, cor } = req.body;
+    const {id, nome, icone, cor, padrao, tipo } = req.body;
 
-    CategoriaTrModel.editCategoriaTr(auth, id, nome, icone, cor, (err, results) => {
+    CategoriaTrModel.editCategoriaTr(auth, id, nome, icone, cor, padrao, tipo, (err, results) => {
         if (err) {
             console.error('Não foi possível editar essa Categoria', err);
             return res.status(500).json({ error: 'Não foi possível editar essa Categoria', results })

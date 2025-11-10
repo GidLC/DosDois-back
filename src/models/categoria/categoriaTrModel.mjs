@@ -13,12 +13,12 @@ class CategoriaTrModel {
     }
 
     static loadCategoriaTr = (auth, tipo, callback) => {
-        const query = `SELECT cat.id, cat.nome, cat.cat_sistema, cat.padrao, c.codigo AS cod_cor, ic.ion_nome AS icone FROM categoria_tr AS cat 
+        const query = `SELECT cat.id, cat.nome, cat.cat_sistema, cat.padrao, cat.tipo, c.codigo AS cod_cor, ic.ion_nome AS icone FROM categoria_tr AS cat 
                         INNER JOIN cor AS c ON cat.cor = c.id 
                         INNER JOIN icones AS ic ON cat.icone = ic.id
-                            WHERE casal = ? AND tipo = ? AND cat_sistema != 1
+                            WHERE casal = ? ${tipo ? `AND tipo = ?` : ``}  AND cat_sistema != 1
                                 ORDER BY cat.nome ASC`
-        pool.query(query, [auth, tipo], (err, results) => {
+        pool.query(query, [auth, tipo && tipo], (err, results) => {
             if (err) {
                 return callback(err, null)
             }
@@ -37,7 +37,7 @@ class CategoriaTrModel {
     }
 
     static loadCategoriaTrID = (auth, id, callback) => {
-        const query = 'SELECT id, nome, tipo, cor, icone FROM categoria_tr where casal = ? AND id = ?';
+        const query = 'SELECT id, nome, tipo, cor, icone, padrao FROM categoria_tr where casal = ? AND id = ?';
         pool.query(query, [auth, id], (err, results) => {
             if (err) {
                 return callback(err, null)
@@ -49,16 +49,37 @@ class CategoriaTrModel {
         })
     }
 
-    static editCategoriaTr = (auth, id, nome, icone, cor, callback) => {
-        console.log(auth, id, nome, icone, cor)
-        const query = 'UPDATE categoria_tr SET nome = ?, cor = ?, icone = ? WHERE casal = ? AND id = ?'
-        pool.query(query, [nome, cor, icone, auth, id], (err, results) => {
-            if (err) {
-                return callback(err, null)
+    static editCategoriaTr = async (auth, id, nome, icone, cor, padrao, tipo, callback) => {
+        try {
+            // Se a categoria for padrão zera todas as outras de serem padrão
+            if (padrao) {
+                await new Promise((resolve, reject) => {
+                    const query = 'UPDATE categoria_tr SET padrao = 0 WHERE casal = ? AND tipo = ?'
+                    pool.query(query, [auth, tipo], (err, results) => {
+                        if (err) {
+                            reject(err)
+                        }
+
+                        resolve(results)
+                    })
+                })
             }
 
-            return callback(null, results)
-        })
+            const edit = await new Promise((resolve, reject) => {
+                const query = 'UPDATE categoria_tr SET nome = ?, cor = ?, icone = ?, padrao = ? WHERE casal = ? AND id = ?'
+                pool.query(query, [nome, cor, icone, padrao, auth, id], (err, results) => {
+                    if (err) {
+                        reject(err)
+                    }
+
+                    resolve(results)
+                })
+            })
+
+            return callback(null, edit)
+        } catch (error) {
+            return callback(error, null)
+        }
     }
 
     //Só se utiliza esse delete caso a categoria não tenha movimentações atribuidas a ela

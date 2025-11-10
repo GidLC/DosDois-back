@@ -112,9 +112,9 @@ const mudaSenha = (req, res) => {
 
 //Autenticação JWT
 const editUser = (req, res) => {
-  const { nome, email, fone, id, foto } = req.body
+  const { nome, email, fone, id, foto, senha, sexo } = req.body
 
-  AuthModel.editUser(nome, email, fone, id, foto, (err, results) => {
+  AuthModel.editUser(nome, email, fone, id, foto, senha, sexo, (err, results) => {
     if (err) {
       return res.status(500).json({ error: `Erro ao realizar a alteração. ${err}` })
     }

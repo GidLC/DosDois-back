@@ -35,10 +35,12 @@ const readBancoID = (req, res) => {
     const cod_casal = req.header('auth');
     const id = req.header("id");
 
+    console.log(id)
     BancoModel.readBancoID(cod_casal, id, (err, results) => {
+        console.log(results)
         if(err) {
             return res.status(500).json({error: 'Erro ao encontrar banco'});
-        } else if(results.lenght == 0) {
+        } else if(results == undefined) {
             return res.status(500).json({error: 'Erro ao encontrar banco'});
         }
 
