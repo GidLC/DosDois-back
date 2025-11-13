@@ -35,10 +35,12 @@ const readBancoID = (req, res) => {
     const cod_casal = req.header('auth');
     const id = req.header("id");
 
+    console.log(id)
     BancoModel.readBancoID(cod_casal, id, (err, results) => {
+        console.log(results)
         if(err) {
             return res.status(500).json({error: 'Erro ao encontrar banco'});
-        } else if(results.lenght == 0) {
+        } else if(results == undefined) {
             return res.status(500).json({error: 'Erro ao encontrar banco'});
         }
 
@@ -95,8 +97,9 @@ const editBanco = (req, res) => {
     const nome = req.header('nome');
     const tipo = req.header('tipo');
     const usuario = req.header('usuario');
+    const padrao = req.header('padrao')
 
-    BancoModel.editBanco(id, casal, nome, tipo, usuario, (err, results) => {
+    BancoModel.editBanco(id, casal, nome, tipo, usuario, padrao, (err, results) => {
         if (err) {
             return res.status(500).json({error: 'Não foi possível realizar essa edição'});
         }

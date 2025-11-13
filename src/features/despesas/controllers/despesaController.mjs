@@ -154,8 +154,9 @@ const editDespesaFixa = (req, res) => {
 
 const deleteDespesa = (req, res) => {
     const casal = req.header('auth')
-    const { id, id_fixo, pend } = req.body
-    console.log({ id, id_fixo, pend })
+    const id = req.header('id')
+    const id_fixo = req.header('id_fixo')
+    const pend = req.header('pend')
 
     DespesaModel.deleteDespesa(casal, id, id_fixo, pend, (err, results) => {
         if (err) {

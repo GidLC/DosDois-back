@@ -173,13 +173,13 @@ class DespesaModel {
                   BETWEEN ? AND ?`;
                 params.push(dataInicio, dataFim);
 
-            //Um mês específico
+                //Um mês específico
             } else if (ano && mes !== null) {
                 inicio = new Date(ano, mes, 1);
                 fim = new Date(ano, mes + 1, 0);
                 queryBase += ' AND des.ano = ? AND des.mes = ?';
                 params.push(ano, mes);
-            // Um ano específico
+                // Um ano específico
             } else if (ano) {
                 inicio = new Date(ano, 0, 1);
                 fim = new Date(ano, 11, 31);
@@ -407,10 +407,11 @@ class DespesaModel {
     }
 
     static deleteDespesa = async (casal, id, id_fixo, pend, callback) => {
+        if (id_fixo == 'undefined') id_fixo = undefined
+        
         const tabela = (!id_fixo || id_fixo == undefined) ? 'despesa' : 'despesas_fixas';
         const params = (pend == 1) ? [id_fixo, casal] : [id, casal]
         const query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND casal = ?`;
-	console.log({query, casal, id, id_fixo, pend})
 
         pool.query(query, params, (err, results) => {
             if (err) {

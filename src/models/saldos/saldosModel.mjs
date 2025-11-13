@@ -197,6 +197,7 @@ class SaldosModel {
                     const bancoNome = banco.nome
                     const bancoTipo = banco.tipo
                     const arquivo = banco.arquivo
+                    const padrao = banco.padrao
 
                     //Definir os saldos dos anos anteriores ao ano da requisição
                     const qtdAnos = ano - 2024
@@ -382,7 +383,7 @@ class SaldosModel {
 
 
                     //console.log({bancoId, saldoInicial, receitasBD, despesasBD, transfCredBD, transfDebBD})
-                    return { bancoNome, bancoId, saldoInicial, bancoTipo, arquivo, saldoAnual, saldoMensal }
+                    return { bancoNome, bancoId, saldoInicial, bancoTipo, arquivo, saldoAnual, saldoMensal, padrao }
                 }));
 
                 return bancosComSaldo;
