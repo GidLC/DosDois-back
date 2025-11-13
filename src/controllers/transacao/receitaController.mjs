@@ -80,7 +80,7 @@ const deleteReceita = (req, res) => {
   const casal = req.header('auth');
   const usuario = req.header('usuario');
   const id = req.header('id')
-  const id_fixo = req.header('id_fixo')
+  const id_fixo = req.header('idfixo')
   const pend = req.header('pend')
 
   ReceitaModel.deleteReceita(id, usuario, casal, pend, id_fixo, (err, results) => {
