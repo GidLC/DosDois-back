@@ -52,6 +52,7 @@ const getUserData = async (usuario) => {
       casal_formado: 0,
       whatsPend,
     };
+
     const token = createToken(userData);
     return { token, userData };
   }
@@ -297,7 +298,18 @@ class AuthModel {
 
       await updateLastAccess(usuario.id);
       const result = await getUserData(usuario);
-      return callback(null, result);
+      const refreshToken = createToken(result.userData, "180d")
+
+      await new Promise((resolve, reject) => {
+        const query = 'UPDATE usuario SET refresh_token = ? WHERE id = ?'
+        pool.query(query, [refreshToken, usuario.id], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
+        })
+      })
+
+      const response = { ...result, refreshToken }
+      return callback(null, response);
     } catch (error) {
       console.error(`Erro no login: ${error}`);
       return callback(error, null);
@@ -461,7 +473,7 @@ class AuthModel {
   }
 
   static editUser = (nome, email, fone, id, foto, senha, sexo, callback) => {
-    const google = (senha && sexo ) ? true : false
+    const google = (senha && sexo) ? true : false
     const senhaHash = google && crypto.createHash('sha256').update(senha).digest('hex');
 
     let caminhoFoto = null;
@@ -582,7 +594,7 @@ class AuthModel {
     }
   }
 
-  static async atualizaUsuario(idUser, callback) {
+  static async atualizaUsuario(idUser, refreshToken, callback) {
     try {
       const [usuario] = await new Promise((resolve, reject) => {
         pool.query('SELECT * FROM usuario WHERE id = ?', [idUser], (err, results) => {
@@ -592,8 +604,14 @@ class AuthModel {
       });
 
       if (!usuario) return callback('Usuário não encontrado', null);
-      const result = await getUserData(usuario);
-      return callback(null, result);
+
+      if (refreshToken != usuario.refresh_token) {
+        return callback("Refresh token inválido", null)
+      } else {
+        const result = await getUserData(usuario);
+        return callback(null, result);
+      }
+
     } catch (error) {
       console.error(`Erro ao atualizar usuário: ${error}`);
       return callback(error, null);
