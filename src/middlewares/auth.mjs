@@ -1,23 +1,25 @@
 import jwt from 'jsonwebtoken';
-import { JWT_EXPIRES, JWT_SECRET } from '../data/apiConfig.mjs';
+import { JWT_SECRET } from '../data/apiConfig.mjs';
 
 export const autenticarJWT = (req, res, next) => {
-    const authHeader = req.headers.authorization
+  const authHeader = req.headers.authorization
 
-    if (!authHeader) return res.sendStatus(401)
+  if (!authHeader) return res.sendStatus(401)
 
-    const token = authHeader.split(' ')[1]
+  const token = authHeader.split(' ')[1]
 
-    jwt.verify(token, JWT_SECRET, (err, usuario) => {
-        if (err) return res.sendStatus(403)
+  jwt.verify(token, JWT_SECRET, (err, usuario) => {
+    if (err) return res.sendStatus(403)
 
-        req.usuario = usuario;
-        next();
-    });
+    req.usuario = usuario;
+    next();
+  });
 }
 
-export const createToken = (payload, expiresIn = null) => {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: expiresIn ? expiresIn : JWT_EXPIRES 
-  })
+export const createToken = (payload, expiresIn) => {
+  if (expiresIn) {
+    return jwt.sign(payload, JWT_SECRET, {expiresIn: expiresIn})
+  } else {
+    return jwt.sign(payload, JWT_SECRET)
+  }
 }

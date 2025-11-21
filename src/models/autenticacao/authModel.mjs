@@ -12,10 +12,11 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { formataDataBr } from "../../data/formataDataBR/formataDataBR.mjs";
 import { formataFone } from "../../data/formataFone/formataFone.mjs";
+import { JWT_EXPIRES } from "../../data/apiConfig.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const getUserData = async (usuario) => {
+const getUserData = async (usuario, remember) => {
   //Verifica casal
   const [casal] = await new Promise((resolve, reject) => {
     const query = 'SELECT * FROM casal WHERE usuario_princ = ? OR usuario_sec = ?';
@@ -53,7 +54,7 @@ const getUserData = async (usuario) => {
       whatsPend,
     };
 
-    const token = createToken(userData);
+    const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
     return { token, userData };
   }
 
@@ -82,7 +83,7 @@ const getUserData = async (usuario) => {
     whatsPend,
   };
 
-  const token = createToken(userData);
+  const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
   return { token, userData };
 }
 
@@ -282,7 +283,7 @@ class AuthModel {
     }
   }
 
-  static loginUsuario = async (email, senha, callback) => {
+  static loginUsuario = async (email, senha, remember, callback) => {
     try {
       const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
 
@@ -297,19 +298,9 @@ class AuthModel {
       if (!usuario) return callback('Usuário não encontrado', null);
 
       await updateLastAccess(usuario.id);
-      const result = await getUserData(usuario);
-      const refreshToken = createToken(result.userData, "180d")
+      const result = await getUserData(usuario, remember);
 
-      await new Promise((resolve, reject) => {
-        const query = 'UPDATE usuario SET refresh_token = ? WHERE id = ?'
-        pool.query(query, [refreshToken, usuario.id], (err, results) => {
-          if (err) reject(err);
-          else resolve(results);
-        })
-      })
-
-      const response = { ...result, refreshToken }
-      return callback(null, response);
+      return callback(null, result);
     } catch (error) {
       console.error(`Erro no login: ${error}`);
       return callback(error, null);
@@ -594,7 +585,7 @@ class AuthModel {
     }
   }
 
-  static async atualizaUsuario(idUser, refreshToken, callback) {
+  static async atualizaUsuario(idUser, callback) {
     try {
       const [usuario] = await new Promise((resolve, reject) => {
         pool.query('SELECT * FROM usuario WHERE id = ?', [idUser], (err, results) => {
@@ -605,12 +596,8 @@ class AuthModel {
 
       if (!usuario) return callback('Usuário não encontrado', null);
 
-      if (refreshToken != usuario.refresh_token) {
-        return callback("Refresh token inválido", null)
-      } else {
-        const result = await getUserData(usuario);
-        return callback(null, result);
-      }
+      const result = await getUserData(usuario);
+      return callback(null, result);
 
     } catch (error) {
       console.error(`Erro ao atualizar usuário: ${error}`);

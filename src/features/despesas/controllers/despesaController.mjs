@@ -1,11 +1,11 @@
 ﻿import DespesaModel from "../models/despesaModel.mjs";
 
 const addDespesa = (req, res) => {
-    const { descricao, valor, categoria, status, data, banco, tipo, fixa, tag, obs, repetir } = req.body;
+    const { descricao, valor, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado } = req.body;
     const cod_casal = req.header('auth');
     const usuario = req.header('usuario')
 
-    DespesaModel.addDespesa(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, (err, resultado) => {
+    DespesaModel.addDespesa(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado, (err, resultado) => {
         if (err) {
             console.error('Erro ao cadastrar despesa:', err);
             return res.status(500).json({ error: `Erro ao cadastrar despesa. ${err}` })
