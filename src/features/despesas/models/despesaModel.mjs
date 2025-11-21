@@ -4,10 +4,13 @@ import * as crypto from 'crypto';
 
 class DespesaModel {
     //Adiciona despesas, tanto normais como fixas
-    static addDespesa = async (descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, callback) => {
+    static addDespesa = async (descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado, callback) => {
         try {
             const objData = await SeparaData(data)
             const anoAtual = new Date().getFullYear();
+
+            const valorReal = (Number(parcelado) == 1) ? valor : (valor / Number(parcelado))
+            if (Number(parcelado) > 1) repetir = Number(parcelado)
 
             //Cadastro de despesa padrão
             if (fixa == 0 || !fixa) {
@@ -35,7 +38,7 @@ class DespesaModel {
 
                     promisses.push(
                         new Promise((resolve, reject) => {
-                            pool.query(query, [(repetir > 1) ? descricaoRep : descricao, valor, usuario, cod_casal, categoria, status, objData.dia, mesRep, anoRep, banco, tipo, tag, obs], (err, results) => {
+                            pool.query(query, [(repetir > 1) ? descricaoRep : descricao, valorReal, usuario, cod_casal, categoria, status, objData.dia, mesRep, anoRep, banco, tipo, tag, obs], (err, results) => {
                                 if (err) {
                                     reject(err)
                                 }

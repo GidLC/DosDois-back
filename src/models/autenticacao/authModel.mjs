@@ -12,10 +12,11 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { formataDataBr } from "../../data/formataDataBR/formataDataBR.mjs";
 import { formataFone } from "../../data/formataFone/formataFone.mjs";
+import { JWT_EXPIRES } from "../../data/apiConfig.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const getUserData = async (usuario) => {
+const getUserData = async (usuario, remember) => {
   //Verifica casal
   const [casal] = await new Promise((resolve, reject) => {
     const query = 'SELECT * FROM casal WHERE usuario_princ = ? OR usuario_sec = ?';
@@ -52,7 +53,8 @@ const getUserData = async (usuario) => {
       casal_formado: 0,
       whatsPend,
     };
-    const token = createToken(userData);
+
+    const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
     return { token, userData };
   }
 
@@ -81,7 +83,7 @@ const getUserData = async (usuario) => {
     whatsPend,
   };
 
-  const token = createToken(userData);
+  const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
   return { token, userData };
 }
 
@@ -281,7 +283,7 @@ class AuthModel {
     }
   }
 
-  static loginUsuario = async (email, senha, callback) => {
+  static loginUsuario = async (email, senha, remember, callback) => {
     try {
       const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
 
@@ -296,7 +298,8 @@ class AuthModel {
       if (!usuario) return callback('Usuário não encontrado', null);
 
       await updateLastAccess(usuario.id);
-      const result = await getUserData(usuario);
+      const result = await getUserData(usuario, remember);
+
       return callback(null, result);
     } catch (error) {
       console.error(`Erro no login: ${error}`);
@@ -461,7 +464,7 @@ class AuthModel {
   }
 
   static editUser = (nome, email, fone, id, foto, senha, sexo, callback) => {
-    const google = (senha && sexo ) ? true : false
+    const google = (senha && sexo) ? true : false
     const senhaHash = google && crypto.createHash('sha256').update(senha).digest('hex');
 
     let caminhoFoto = null;
@@ -592,8 +595,10 @@ class AuthModel {
       });
 
       if (!usuario) return callback('Usuário não encontrado', null);
+
       const result = await getUserData(usuario);
       return callback(null, result);
+
     } catch (error) {
       console.error(`Erro ao atualizar usuário: ${error}`);
       return callback(error, null);
