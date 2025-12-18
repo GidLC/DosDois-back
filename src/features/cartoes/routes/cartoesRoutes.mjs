@@ -7,5 +7,6 @@ cartoesRouter.use(autenticarJWT)
 
 cartoesRouter.post('/addCartao', cartoesController.addCartao)
 cartoesRouter.get('/getBandeiras', cartoesController.buscaBandeiras)
+cartoesRouter.get('/getAllCartoes', cartoesController.getAllCartoes)
 
 export default cartoesRouter
