@@ -317,50 +317,61 @@ class DespesaModel {
         cartao,
         callback) => {
 
-        const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
-        const objData = await SeparaData(data, true)
+        try {
+            const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
+            const objData = await SeparaData(data, true)
 
-        //Busca a despesa conforme ela está atualmente no BD
-        const [old] = await new Promise((resolve, reject) => {
-            pool.query(`SELECT * FROM ${tabela} WHERE id = ? AND casal = ?`, [id, casal], (err, results) => {
-                if (err) {
-                    reject(err)
-                }
+            //Busca a despesa conforme ela está atualmente no BD
+            const [old] = await new Promise((resolve, reject) => {
+                pool.query(`SELECT * FROM ${tabela} WHERE id = ? AND casal = ?`, [id, casal], (err, results) => {
+                    if (err) {
+                        reject(err)
+                    }
 
-                resolve(results)
-            });
-        })
-
-
-        //Identifica se houve mudança de cartão ou mês
-        const mudouCartao = old.cartao !== cartao;
-        const mudouMes = old.mes !== objData.mes || old.ano !== objData.ano;
-
-        //Identifica se houve mudanças nos valores
-        const oldValue = Number(old.valor);
-        const newValue = Number(valor);
-
-        const query = `UPDATE ${tabela} SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ?, banco = ?, cartao = ? WHERE casal = ? AND id = ?`
-
-        if (!cartao && !old.cartao) {
-            pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, cartao, casal, id], (err, results) => {
-                if (err) {
-                    return callback(err, null)
-                }
-
-                return callback(null, results)
+                    resolve(results)
+                });
             })
+
+            //Identifica se houve mudanças nos valores
+            const oldValue = Number(old.valor);
+            const newValue = Number(valor);
+
+            const query = `UPDATE ${tabela} SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ?, banco = ?, cartao = ?, fatura = ? WHERE casal = ? AND id = ?`
+
+            const editDespesa = async (objData) => {
+                return await new Promise((resolve, reject) => {
+                    pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, cartao, objData.id, casal, id], (err, results) => {
+                        if (err) {
+                            reject(err)
+                        }
+
+                        resolve(results)
+                    })
+                })
+            }
+
+
+            //Se a despesa atual ou anterior não tiver cartão retorna para o front
+            if (!cartao && !old.cartao) {
+                const despesa = editDespesa(objData)
+                return callback(null, despesa)
+            }
+
+            const newFatura = await atualizaFatura(
+                old,
+                oldValue,
+                newValue,
+                cartao,
+                objData
+            )
+
+            editDespesa(newFatura)
+
+            return callback(null, 'OK')
+        } catch (error) {
+            console.error(`Não foi possível editar a despesa. ${error}`)
+            return callback(error, null)
         }
-
-        await atualizaFatura(
-            old,
-            oldValue,
-            newValue,
-            cartao,
-            objData
-        )
-
-        return callback(null, 'OK')
     }
 
 
@@ -382,6 +393,26 @@ class DespesaModel {
         if (id_fixo == 'undefined') id_fixo = undefined
 
         const tabela = (!id_fixo || id_fixo == undefined) ? 'despesa' : 'despesas_fixas';
+
+        const [old] = await new Promise((resolve, reject) => {
+            pool.query(`SELECT * FROM ${tabela} WHERE id = ?`, [id], (err, results) => {
+                if (err) {
+                    reject(err)
+                }
+
+                resolve(results)
+            });
+        })
+
+        if (old.cartao) {
+            atualizaFatura(
+                old,
+                old.valor,
+                0,
+                old.cartao
+            )
+        }
+
         const params = (pend == 1) ? [id_fixo, casal] : [id, casal]
         const query = `DELETE FROM ${tabela} WHERE ${pend == 1 ? `id_fixo = ? AND status = 0` : `id = ?`} AND casal = ?`;
 
