@@ -22,6 +22,8 @@ export const getOrCreateFatura = async (cartao_id, mes, ano) => {
                 VALUES (?, ?, ?, 0, 'aberta')
             `;
 
+            //Verificar se há despesas fixas para esse cartão e inclui-las na nova fatura
+
             pool.query(queryInsert, [cartao_id, mes, ano], (err, insertRes) => {
                 if (err) return reject(err);
 

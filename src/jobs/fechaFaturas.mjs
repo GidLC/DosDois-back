@@ -9,14 +9,14 @@ export const fechaFaturas = async () => {
 
         const queryCartoes = `SELECT id_cartao as id, fech FROM cartoes WHERE fech = ?`
 
-        const [cartoes] = await queryAsync(queryCartoes, [dataBR.dia])
+        const cartoes = await queryAsync(queryCartoes, [dataBR.dia])
 
         for (const cartao of cartoes) {
             const queryFatura = `SELECT * FROM cartao_faturas 
-                 WHERE cartao_id = ? AND status = 'aberta'
-                 ORDER BY ano DESC, mes DESC LIMIT 1`
+                 WHERE cartao_id = ? AND status = 'aberta' AND mes = ?`
 
-            const [faturas] = await queryAsync(queryFatura, [cartao.id])
+            const faturas = await queryAsync(queryFatura, [cartao.id, dataBR.mes])
+            console.log(faturas)
 
             if (faturas.length === 0) continue
 
@@ -37,7 +37,7 @@ export const fechaFaturas = async () => {
             await getOrCreateFatura(cartao.id, mesNovo, anoNovo)
         }
     } catch (error) {
-        console.error('Erro no fechamento automático de faturas:', err);
+        console.error('Erro no fechamento automático de faturas:', error);
     }
 
 }
