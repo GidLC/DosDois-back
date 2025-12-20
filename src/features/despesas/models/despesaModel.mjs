@@ -2,10 +2,11 @@
 import SeparaData from '../../../data/SeparaData/SeparaData.mjs';
 import * as crypto from 'crypto';
 import { agruparPorFiltro, despesasQueryBuilder } from "../utils/despesasQueryBuilder.mjs";
-import { getMesAnoFatura } from "../utils/getMesAnoFatura.mjs";
-import { getOrCreateFatura } from "../utils/getOrCreateFatura.mjs";
+import { getMesAnoFatura } from "../../cartoes/utils/getMesAnoFatura.mjs";
+import { getOrCreateFatura } from "../../cartoes/utils/getOrCreateFatura.mjs";
 import { despesasProcess } from "../utils/despesasProcess.mjs";
 import { atualizaFatura } from "../../cartoes/utils/atualizaFatura.mjs";
+import { calcLimiteDisp } from "../../cartoes/utils/calcLimiteDisp.mjs";
 
 class DespesaModel {
     //Adiciona despesas, tanto normais como fixas
@@ -33,13 +34,16 @@ class DespesaModel {
             const valorReal = (Number(parcelado) == 1) ? Number(valor) : (Number(valor) / Number(parcelado))
             if (Number(parcelado) > 1) repetir = Number(parcelado)
 
+            //Cria identificador para as parcelas
+            const uuid_parcela = (repetir > 1) ? crypto.randomUUID() : null
+
             // Se for despesa em cartão
             // -----------------------------------------------------------------
             if (cartao != null && Number(cartao) > 0) {
-                // Puxa dados do cartão (fechamento, vencimento)
+                // Puxa dados do cartão (id, fechamento, vencimento e limite)
                 const infoCartao = await new Promise((resolve, reject) => {
                     const q = `
-                    SELECT id_cartao AS id, fech, venc 
+                    SELECT id_cartao AS id, fech, venc, limite 
                     FROM cartoes 
                     WHERE id_cartao = ?
                 `;
@@ -52,6 +56,16 @@ class DespesaModel {
                 const promisses = [];
                 let mesRep = objData.mes;
                 let anoRep = objData.ano;
+
+                const limiteDisp = await calcLimiteDisp(infoCartao)
+
+                console.log({
+                    limiteDisp,
+                    despesa: (valorReal * repetir)
+                })
+                if (limiteDisp < (valorReal * repetir)) {
+                    return callback("Sem limite disponível nesse cartão", null)
+                }
 
                 //Loop para repetição e parcelamento
                 for (let i = 0; i < repetir; i++) {
@@ -73,8 +87,8 @@ class DespesaModel {
                         const query = `
                         INSERT INTO despesa(
                             descricao, valor, usuario, casal, categoria, status,
-                            dia, mes, ano, banco, tipo, tag, obs, cartao, fatura
-                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                            dia, mes, ano, banco, tipo, tag, obs, cartao, fatura, id_parcela
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     `;
 
                         pool.query(
@@ -82,7 +96,7 @@ class DespesaModel {
                             [
                                 descParc, valorReal, usuario, cod_casal, categoria, status,
                                 infoCartao.venc, mes, ano, null, tipo, tag, obs,
-                                cartao, fatura.id
+                                cartao, fatura.id, uuid_parcela
                             ],
                             async (err, result) => {
                                 if (err) return reject(err);
@@ -114,7 +128,7 @@ class DespesaModel {
 
             //Cadastro de despesa padrão
             if (fixa == 0 || !fixa) {
-                const query = 'INSERT INTO despesa(descricao, valor, usuario, casal, categoria, status, dia, mes, ano, banco, tipo, tag, obs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)';
+                const query = 'INSERT INTO despesa(descricao, valor, usuario, casal, categoria, status, dia, mes, ano, banco, tipo, tag, obs, id_parcela) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
                 const promisses = []
 
                 //Lógica para cadastrar uma ou mais despesas
@@ -138,7 +152,7 @@ class DespesaModel {
 
                     promisses.push(
                         new Promise((resolve, reject) => {
-                            pool.query(query, [(repetir > 1) ? descricaoRep : descricao, valorReal, usuario, cod_casal, categoria, status, objData.dia, mesRep, anoRep, banco, tipo, tag, obs], (err, results) => {
+                            pool.query(query, [(repetir > 1) ? descricaoRep : descricao, valorReal, usuario, cod_casal, categoria, status, objData.dia, mesRep, anoRep, banco, tipo, tag, obs, uuid_parcela], (err, results) => {
                                 if (err) {
                                     reject(err)
                                 }

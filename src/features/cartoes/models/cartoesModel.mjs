@@ -1,6 +1,8 @@
 import { pool } from "../../../config/config.mjs"
 import separaData from "../../../data/SeparaData/SeparaData.mjs"
+import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs"
 import { despesasQueryBuilder } from "../../despesas/utils/despesasQueryBuilder.mjs"
+import { calcLimiteDisp } from "../utils/calcLimiteDisp.mjs"
 
 const data = new Date()
 const dataBR = await separaData(data)
@@ -87,13 +89,6 @@ class CartoesModel {
             /** --------------------------------------------------
              * Função auxiliar para consultas com Promise
              * --------------------------------------------------*/
-            const queryAsync = (sql, params) =>
-                new Promise((resolve, reject) => {
-                    pool.query(sql, params, (err, results) => {
-                        if (err) return reject(err);
-                        resolve(results);
-                    });
-                });
 
 
             /** --------------------------------------------------
@@ -101,29 +96,8 @@ class CartoesModel {
              * --------------------------------------------------*/
             const processados = await Promise.all(
                 cartoes.map(async cartao => {
-
-                    /** -- 2.1. Despesas pendentes ------------------*/
-                    const qPend = `
-                    SELECT SUM(valor) AS total
-                    FROM despesa
-                    WHERE status = 0 AND cartao = ?
-                `;
-                    const [despPend] = await queryAsync(qPend, [cartao.id]);
-                    const pendentes = Number(despPend.total) || 0;
-
-
-                    /** -- 2.2. Despesas fixas -----------------------*/
-                    const qFixas = `
-                    SELECT SUM(valor) AS total
-                    FROM despesas_fixas
-                    WHERE cartao = ?
-                `;
-                    const [fixPend] = await queryAsync(qFixas, [cartao.id]);
-                    const fixas = Number(fixPend.total) || 0;
-
-
                     /** -- 2.3. Limite disponível --------------------*/
-                    const limiteDisp = Number(cartao.limite) - (pendentes + fixas);
+                    const limiteDisp = await calcLimiteDisp(cartao)
 
 
                     /** -- 2.4. Fatura aberta e anterior -------------*/

@@ -1,13 +1,10 @@
 import { pool } from "../../../config/config.mjs";
-import { getOrCreateFatura } from "../../despesas/utils/getOrCreateFatura.mjs";
+import { getOrCreateFatura } from "./getOrCreateFatura.mjs";
 
 export const atualizaFatura = async (old, oldValue, newValue, cartaoNovo, objData = undefined) => {
-    console.log({ old, oldValue, newValue, cartaoNovo, objData })
     //Valida se é o mesmo cartão e a mesma data
     const sameCartao = old.cartao == cartaoNovo;
     const sameDate = (objData) ? (old.mes == objData.mes && old.ano == objData.ano) : true
-
-    console.log({ sameCartao, sameDate })
 
     //Preciso identificar antes de editar a despesa para qual data ela será "enviada"
     // Caso despesa continue na mesma fatura
