@@ -35,4 +35,16 @@ const getAllCartoes = (req, res) => {
     })
 }
 
-export default { addCartao, buscaBandeiras, getAllCartoes }
+const pagarFatura = (req, res) => {
+    const { idFatura } = req.query
+
+    CartoesModel.pagarFatura(idFatura, (err, results) => {
+        if (err) {
+            console.error('Não foi possível pagar a fatura', err);
+            return res.status(500).json({ error: 'Não foi possível pagar essa fatura' });
+        }
+        res.status(200).json({ message: 'Fatura paga com sucesso', results })
+    })
+}
+
+export default { addCartao, buscaBandeiras, getAllCartoes, pagarFatura }

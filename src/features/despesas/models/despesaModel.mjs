@@ -53,18 +53,34 @@ class DespesaModel {
                     });
                 });
 
+
                 const promisses = [];
                 let mesRep = objData.mes;
                 let anoRep = objData.ano;
 
                 const limiteDisp = await calcLimiteDisp(infoCartao)
 
-                console.log({
-                    limiteDisp,
-                    despesa: (valorReal * repetir)
-                })
                 if (limiteDisp < (valorReal * repetir)) {
                     return callback("Sem limite disponível nesse cartão", null)
+                }
+
+                //Se for uma despesa fixa no cartão registra na tabela pra inclusão mensal(a cada fechamento da fatura)
+                if (fixa == 1) {
+                    const queryFixCart = `
+                        INSERT INTO desp_fixas_cartao(
+                            descricao, valor, usuario, casal, categoria,
+                            tipo, tag, obs, cartao
+                        ) VALUES (?,?,?,?,?,?,?,?,?)
+                    `
+                    await new Promise((resolve, reject) => {
+                        pool.query(queryFixCart, [descricao, valorReal, usuario, cod_casal, categoria, tipo, tag, obs, cartao], (err, results) => {
+                            if (err) {
+                                reject(err)
+                            }
+
+                            resolve(results)
+                        })
+                    })
                 }
 
                 //Loop para repetição e parcelamento
@@ -123,7 +139,7 @@ class DespesaModel {
                 }
 
                 await Promise.all(promisses);
-                return callback(null, { message: "Despesa de cartão registrada com sucesso!" });
+                return callback(null, { message: "Despesa no cartão registrada com sucesso!" });
             }
 
             //Cadastro de despesa padrão
