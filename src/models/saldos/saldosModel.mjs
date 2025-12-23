@@ -364,7 +364,8 @@ class SaldosModel {
                     //Incrementa os saldos mensais conforme mês anterior
                     for (let i = 0; i < 12; i++) {
                         if (i == 0) {
-                            saldoMensal[i] = saldoAnual[qtdAnos - 1]
+                            console.log(saldoAnual[qtdAnos - 1])
+                            saldoMensal[i] = saldoAnual[qtdAnos - 1] //Se for janeiro pega o saldo do ano anterior
                         } else if (saldoMensal[i] === 0) {
                             saldoMensal[i] = saldoMensal[i - 1] //Se o saldo estiver zerado recebe o saldo do mês anterior
                         } else {

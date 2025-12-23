@@ -47,4 +47,16 @@ const pagarFatura = (req, res) => {
     })
 }
 
-export default { addCartao, buscaBandeiras, getAllCartoes, pagarFatura }
+const editCartao = (req, res) => {
+    const { id, nome, banco, bandeira, limite, fech, venc, cor } = req.body
+
+    CartoesModel.editCartao(id, nome, banco, bandeira, limite, fech, venc, cor, (err, results) => {
+        if (err) {
+            console.error('Não foi possível editar o cartão', err);
+            return res.status(500).json({ error: 'Não foi possível editar o cartão' });
+        }
+        res.status(200).json({ message: 'Cartão editado com sucesso', results })
+    })
+}
+
+export default { addCartao, buscaBandeiras, getAllCartoes, pagarFatura, editCartao }

@@ -6,6 +6,21 @@ export const atualizaFatura = async (old, oldValue, newValue, cartaoNovo, objDat
     const sameCartao = old.cartao == cartaoNovo;
     const sameDate = (objData) ? (old.mes == objData.mes && old.ano == objData.ano) : true
 
+    //Retorna dados da data para edição da despesa
+    const getDataFatura = async (fatura) => {
+        const [dataFatura] = await new Promise((resolve, reject) => {
+            pool.query(
+                `SELECT car.venc AS dia, fat.mes, fat.ano, fat.id FROM cartao_faturas AS fat
+                INNER JOIN cartoes AS car ON fat.cartao_id = car.id_cartao
+                    WHERE fat.id = ?`, [fatura.id], (err, results) => {
+                if (err) return reject(err);
+                resolve(results);
+            })
+        })
+
+        return dataFatura
+    }
+
     //Preciso identificar antes de editar a despesa para qual data ela será "enviada"
     // Caso despesa continue na mesma fatura
     if (sameCartao && sameDate) {
@@ -25,7 +40,9 @@ export const atualizaFatura = async (old, oldValue, newValue, cartaoNovo, objDat
             })
         }
 
-        return;
+        const dataFatura = await getDataFatura({id: old.fatura})
+
+        return dataFatura
     }
 
     // Caso mude de fatura
@@ -57,17 +74,6 @@ export const atualizaFatura = async (old, oldValue, newValue, cartaoNovo, objDat
         );
     })
 
-    //Retorna dados da data para edição da despesa
-
-    const [dataFatura] = await new Promise((resolve, reject) => {
-        pool.query(
-            `SELECT car.venc AS dia, fat.mes, fat.ano, fat.id FROM cartao_faturas AS fat
-                INNER JOIN cartoes AS car ON fat.cartao_id = car.id_cartao
-                    WHERE fat.id = ?`, [fatura.id], (err, results) => {
-            if (err) return reject(err);
-            resolve(results);
-        })
-    })
-
+    const dataFatura = await getDataFatura(fatura)
     return dataFatura
 }

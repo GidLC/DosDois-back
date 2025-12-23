@@ -69,8 +69,8 @@ class CartoesModel {
              * 1. Buscar cartões do usuário
              * --------------------------------------------------*/
             const queryCartoes = `
-            SELECT car.id_cartao AS id, car.nome, car.fech, car.venc, car.limite,
-                   cor.codigo AS codCor, band.nome AS nomeBandeira
+            SELECT car.id_cartao AS id, car.nome, car.fech, car.venc, car.limite, car.banco, car.disp, car.bandeira as idBandeira,
+                   cor.codigo AS codCor, cor.id AS idCor, band.nome AS nomeBandeira
             FROM cartoes AS car
             INNER JOIN cor ON car.cor = cor.id
             INNER JOIN bandeiras_cartao AS band ON band.id = car.bandeira
@@ -122,7 +122,7 @@ class CartoesModel {
 
 
                     const qFatura = `
-                    SELECT total, id 
+                    SELECT total, id, status 
                     FROM cartao_faturas 
                     WHERE cartao_id = ? AND mes = ? AND ano = ? AND status IN (?,?)
                 `;
@@ -136,15 +136,20 @@ class CartoesModel {
                         id: cartao.id,
                         nome: cartao.nome,
                         bandeira: cartao.nomeBandeira,
+                        idBandeira: cartao.idBandeira,
                         limite: Number(cartao.limite),
                         limiteDisp,
                         fech: cartao.fech,
                         venc: cartao.venc,
                         cor: cartao.codCor,
+                        idCor: cartao.idCor,
+                        banco: cartao.banco,
+                        disp: cartao.disp,
                         faturaAtual: faturaAtual?.total || 0,
                         faturaFechada: faturaFechada?.total || 0,
                         idFaturaAtual: faturaAtual?.id || null,
-                        idFaturaFechada: faturaFechada?.id || null
+                        idFaturaFechada: faturaFechada?.id || null,
+                        statusFatFechada: faturaFechada.status || null
                     };
                 })
             );
@@ -184,7 +189,7 @@ class CartoesModel {
             //Busca dados do cartão
             const queryCartao = `SELECT * FROM cartoes WHERE id_cartao = ?`
             const [cartao] = await queryAsync(queryCartao, [fatura.cartao_id])
-            
+
             //Busca categoria de ajuste
             const queryCategoria = `SELECT * FROM categoria_tr WHERE casal = ? AND tipo = 0 AND cat_sistema = 1`
             const [categoria] = await queryAsync(queryCategoria, [despesas[0].casal])
@@ -228,6 +233,18 @@ class CartoesModel {
         }
     }
 
+    static editCartao = async (id, nome, banco, bandeira, limite, fech, venc, cor, callback) => {
+        try {
+            //O valor do limite não pode ser menor que o valor das faturas abertas
+            const queryEdit = `UPDATE cartoes SET nome = ?, banco = ?, bandeira = ?, limite = ?, fech = ?, venc = ?, cor = ? WHERE id_cartao = ?`;
+            await queryAsync(queryEdit, [nome, banco, bandeira, limite, fech, venc, cor, id])
+
+            return callback(null, 'EDITADA')
+        } catch (error) {
+            console.error(`Não foi possível editar esse cartão. ${error}`)
+            return callback(error, null)
+        }
+    }
 
 }
 
