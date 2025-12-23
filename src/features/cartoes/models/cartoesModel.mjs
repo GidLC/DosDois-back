@@ -122,13 +122,13 @@ class CartoesModel {
 
 
                     const qFatura = `
-                    SELECT total 
+                    SELECT total, id 
                     FROM cartao_faturas 
-                    WHERE cartao_id = ? AND mes = ? AND ano = ? AND status = ?
+                    WHERE cartao_id = ? AND mes = ? AND ano = ? AND status IN (?,?)
                 `;
 
-                    const [faturaAtual] = await queryAsync(qFatura, [cartao.id, mesAtual, anoAtual, "aberta"]);
-                    const [faturaFechada] = await queryAsync(qFatura, [cartao.id, mesAnterior, anoAnterior, "fechada"]);
+                    const [faturaAtual] = await queryAsync(qFatura, [cartao.id, mesAtual, anoAtual, "aberta", "aberta"]);
+                    const [faturaFechada] = await queryAsync(qFatura, [cartao.id, mesAnterior, anoAnterior, "fechada", "paga"]);
 
 
                     /** -- 2.5. Retorno do cartão --------------------*/
@@ -142,7 +142,9 @@ class CartoesModel {
                         venc: cartao.venc,
                         cor: cartao.codCor,
                         faturaAtual: faturaAtual?.total || 0,
-                        faturaFechada: faturaFechada?.total || 0
+                        faturaFechada: faturaFechada?.total || 0,
+                        idFaturaAtual: faturaAtual?.id || null,
+                        idFaturaFechada: faturaFechada?.id || null
                     };
                 })
             );
@@ -178,12 +180,11 @@ class CartoesModel {
             //Busca dados da fatura
             const queryFatura = `SELECT * FROM cartao_faturas WHERE id = ?`
             const [fatura] = await queryAsync(queryFatura, [idFatura])
-            console.log(idFatura)
 
             //Busca dados do cartão
             const queryCartao = `SELECT * FROM cartoes WHERE id_cartao = ?`
             const [cartao] = await queryAsync(queryCartao, [fatura.cartao_id])
-
+            
             //Busca categoria de ajuste
             const queryCategoria = `SELECT * FROM categoria_tr WHERE casal = ? AND tipo = 0 AND cat_sistema = 1`
             const [categoria] = await queryAsync(queryCategoria, [despesas[0].casal])
@@ -195,7 +196,7 @@ class CartoesModel {
             for (let i = 0; i < 2; i++) {
                 DespesaModel.addDespesa(
                     `Pagamento da fatura ${cartao.nome}`,
-                    (i == 0 ) ? fatura.total : fatura.total * -1,
+                    (i == 0) ? fatura.total : fatura.total * -1,
                     cartao.usuario,
                     despesas[0].casal,
                     categoria.id,

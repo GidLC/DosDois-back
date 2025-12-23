@@ -8,8 +8,6 @@ const separaData = async (data) => {
         throw new Error('Data inválida: ' + dateBRT.invalidReason)
     }
 
-    console.log(data)
-
     return {
         ano: dateBRT.year,
         mes: dateBRT.month < 10 ? Number(`0${dateBRT.month}`) - 1 : dateBRT.month - 1,
