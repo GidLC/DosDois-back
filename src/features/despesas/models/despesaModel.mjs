@@ -65,9 +65,6 @@ class DespesaModel {
                     return callback("Sem limite disponível nesse cartão", null)
                 }
 
-                // Buscar ou criar a fatura
-                const fatura = await getOrCreateFatura(infoCartao.id, mes, ano);
-
                 //Se for uma despesa fixa no cartão registra na tabela pra inclusão mensal(a cada fechamento da fatura)
                 if (fixa == 1) {
                     const queryFixCart = `
@@ -98,6 +95,9 @@ class DespesaModel {
                         anoRep,
                         infoCartao.fech
                     );
+
+                // Buscar ou criar a fatura
+                const fatura = await getOrCreateFatura(infoCartao.id, mes, ano);
 
                     promisses.push(new Promise((resolve, reject) => {
                         const query = `
