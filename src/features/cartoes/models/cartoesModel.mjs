@@ -1,4 +1,4 @@
-import { pool } from "../../../config/config.mjs"
+﻿import { pool } from "../../../config/config.mjs"
 import separaData from "../../../data/SeparaData/SeparaData.mjs"
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs"
 import DespesaModel from "../../despesas/models/despesaModel.mjs"
@@ -149,7 +149,7 @@ class CartoesModel {
                         faturaFechada: faturaFechada?.total || 0,
                         idFaturaAtual: faturaAtual?.id || null,
                         idFaturaFechada: faturaFechada?.id || null,
-                        statusFatFechada: faturaFechada.status || null
+                        statusFatFechada: faturaFechada?.status || null
                     };
                 })
             );
