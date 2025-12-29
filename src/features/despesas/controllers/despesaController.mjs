@@ -1,11 +1,11 @@
 ﻿import DespesaModel from "../models/despesaModel.mjs";
 
 const addDespesa = (req, res) => {
-    const { descricao, valor, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado } = req.body;
+    const { descricao, valor, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado, cartao } = req.body;
     const cod_casal = req.header('auth');
     const usuario = req.header('usuario')
 
-    DespesaModel.addDespesa(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado, (err, resultado) => {
+    DespesaModel.addDespesa(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado, cartao, (err, resultado) => {
         if (err) {
             console.error('Erro ao cadastrar despesa:', err);
             return res.status(500).json({ error: `Erro ao cadastrar despesa. ${err}` })
@@ -31,6 +31,8 @@ const readDespesa = (req, res) => {
             categoria,
             tag,
             banco,
+            cartao,
+            fatura,
             status,
             valorMin,
             valorMax,
@@ -51,16 +53,19 @@ const readDespesa = (req, res) => {
             categoria: categoria ? Number(categoria) : null,
             tag: tag ? Number(tag) : null,
             banco: banco ? Number(banco) : null,
-            status: status !== undefined ? Number(status) : undefined,
-            valorMin: valorMin ? parseFloat(valorMin) : undefined,
-            valorMax: valorMax ? parseFloat(valorMax) : undefined,
+            cartao: cartao ? Number(cartao) : null,
+            fatura: fatura ? Number(fatura) : null,
+            status: status !== undefined ? Number(status) : null,
+            valorMin: valorMin ? parseFloat(valorMin) : null,
+            valorMax: valorMax ? parseFloat(valorMax) : null,
             descricao: descricao || null,
             groupBy: groupBy || null
         };
 
         // Se veio fixa, faz só uma busca
-        if (fixa != undefined && fixa != null && fixa != "") {
+        if (filtrosBase.fixa != null && filtrosBase.fixa == 1) {
             const filtros = { ...filtrosBase, fixa: Number(fixa) };
+
             DespesaModel.readDespesa(filtros, (err, results) => {
                 if (err) {
                     console.error('Erro ao encontrar despesas:', err);
@@ -118,15 +123,16 @@ const readDespesaID = (req, res) => {
             console.error(`Nenhuma despesa encontrada. Há algum erro na requisição`)
             return res.status(400).json({ message: `Nenhuma despesa encontrada. Há algum erro na requisição` })
         }
+        
         res.status(200).json({ message: 'Despesa encontrada com sucesso', results })
     })
 }
 
 const editDespesa = (req, res) => {
     const casal = req.header('auth');
-    const { id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco } = req.body
+    const { id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco, cartao } = req.body
 
-    DespesaModel.editDespesa(casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco, (err, results) => {
+    DespesaModel.editDespesa(casal, id, descricao, categoria, valor, data, tipo, status, fixa, tag, obs, banco, cartao, (err, results) => {
         if (err) {
             console.error('Erro ao editar a despesa', err);
             return res.status(500).json({ error: 'Erro ao editar a despesa' });
