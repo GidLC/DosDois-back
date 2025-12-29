@@ -434,7 +434,7 @@ class DespesaModel {
             });
         })
 
-        if (old.cartao) {
+        if (old && old.cartao) {
             atualizaFatura(
                 old,
                 old.valor,
