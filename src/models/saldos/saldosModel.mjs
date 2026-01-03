@@ -1,4 +1,5 @@
 import { pool } from "../../config/config.mjs";
+import {queryAsync} from "../../data/queryAsync/queryAsync.mjs"
 
 class SaldosModel {
     //Função para cálculo de todos os saldos da aplicação - saldo estático
@@ -180,229 +181,133 @@ class SaldosModel {
 
     static saldoPorPeriodo = async (casal, usuario, ano, parceiro, callback) => {
         try {
-            //Função para buscar saldos em um determinado periodo
+            const ANO_INICIAL = 2024;
+
             const getSaldos = async (queryBanco, paramsBanco) => {
-                //Busca bancos(coletivos e individuais)
-                const bancosBD = await new Promise((resolve, reject) => {
-                    pool.query(queryBanco, paramsBanco, (err, results) => {
-                        if (err) {
-                            reject(err);
-                        }
-                        resolve(results);
-                    });
-                });
+                //Busca os bancos de acordo com a query e parâmetros enviados
+                const bancosBD = await queryAsync(queryBanco, paramsBanco);
 
-                const bancosComSaldo = await Promise.all(bancosBD.map(async (banco) => {
-                    const bancoId = banco.id
-                    const bancoNome = banco.nome
-                    const bancoTipo = banco.tipo
-                    const arquivo = banco.arquivo
-                    const padrao = banco.padrao
+                return Promise.all(
+                    //Para cada banco encontrado cria um objeto
+                    bancosBD.map(async (banco) => {
+                        const bancoId = banco.id;
+                        const bancoNome = banco.nome;
+                        const bancoTipo = banco.tipo;
+                        const arquivo = banco.arquivo;
+                        const padrao = banco.padrao;
 
-                    //Definir os saldos dos anos anteriores ao ano da requisição
-                    const qtdAnos = ano - 2024
+                        const qtdAnos = ano - ANO_INICIAL + 1;
+                        const saldoAnual = Array(qtdAnos).fill(0);
+                        const saldoMensal = Array(12).fill(0);
 
-                    //Cria um Array para inserir os saldos anuais (a qtd de posições é definida pelo ano da requisição - o ano 2024"inicio da aplicação")
-                    const saldoAnual = Array(qtdAnos).fill(0)
+                        // saldo inicial
+                        const [{ saldo_inicial = 0 }] = await queryAsync(
+                            'SELECT saldo_inicial FROM banco WHERE id = ? AND casal = ?',
+                            [bancoId, casal]
+                        );
 
-                    //Cria um Array de 12 posições preenchidos com 0 (representando cada um um mês)
-                    const saldoMensal = Array(12).fill(0)
+                        let saldoAcumulado = Number(saldo_inicial);
 
-                    //Busco o saldo inicial do banco
-                    const saldoInicialBD = await new Promise((resolve, reject) => {
-                        const querySaldoInicial = 'SELECT saldo_inicial FROM banco WHERE id = ? AND casal = ?';
-                        pool.query(querySaldoInicial, [banco.id, casal], (err, results) => {
-                            if (err) {
-                                reject(err);
+                        // ======================================================
+                        // Para cada ano
+                        // ======================================================
+                        for (let idxAno = 0; idxAno < qtdAnos; idxAno++) {
+                            const anoAtual = ANO_INICIAL + idxAno;
+                            //O saldo mensal para o ano solicitado
+                            const movimentosMes = Array(12).fill(0);
+
+                            const params = [bancoId, casal, anoAtual];
+
+                            //Querys de consulta das transações ao banco(receitas, despesas e transações do banco do loop)
+                            const consultas = [
+                                {
+                                    sql: 'SELECT mes, SUM(valor) total FROM receita WHERE banco = ? AND casal = ? AND ano = ? AND status = 1 GROUP BY mes',
+                                    sinal: +1,
+                                },
+                                {
+                                    sql: 'SELECT mes, SUM(valor) total FROM receitas_fixas WHERE banco = ? AND casal = ? AND ano = ? AND status = 1 GROUP BY mes',
+                                    sinal: +1,
+                                },
+                                {
+                                    sql: 'SELECT mes, SUM(valor) total FROM despesa WHERE banco = ? AND casal = ? AND ano = ? AND status = 1 GROUP BY mes',
+                                    sinal: -1,
+                                },
+                                {
+                                    sql: 'SELECT mes, SUM(valor) total FROM despesas_fixas WHERE banco = ? AND casal = ? AND ano = ? AND status = 1 GROUP BY mes',
+                                    sinal: -1,
+                                },
+                                {
+                                    sql: 'SELECT mes, SUM(valor) total FROM transferencias WHERE banco_origem = ? AND casal = ? AND ano = ? AND tipo = 0 GROUP BY mes',
+                                    sinal: -1,
+                                },
+                                {
+                                    sql: 'SELECT mes, SUM(valor) total FROM transferencias WHERE banco_origem = ? AND casal = ? AND ano = ? AND tipo = 1 GROUP BY mes',
+                                    sinal: +1,
+                                },
+                            ];
+
+                            // aplica query de movimentações no mês correto
+                            for (const { sql, sinal } of consultas) {
+                                const rows = await queryAsync(sql, params);
+
+                                //Incrementa os valores de cada receita
+                                rows.forEach(({ mes, total }) => {
+                                    movimentosMes[mes - 1] += sinal * Number(total);
+                                });
                             }
-                            resolve(results);
-                        });
-                    });
 
-                    //Define saldo inicial do banco
-                    const saldoInicial = saldoInicialBD[0].saldo_inicial;
-                    saldoAnual[0] += saldoInicial
+                            // acumula mês a mês
+                            for (let m = 0; m < 12; m++) {
+                                saldoAcumulado += movimentosMes[m];
 
-                    const calculaSaldo = async (periodo /**ano ou mes */) => {
-                        const paramsMes = [banco.id, casal, ano]
-                        const paramsAno = [banco.id, casal]
-
-                        //Busca todas receitas dos bancos de um determinado ano ou mês
-                        const queryReceitas = `SELECT SUM(valor) AS total, ${periodo} FROM receita WHERE banco = ? AND casal = ? ${periodo == `mes` ? `AND ano = ?` : ``} AND status = 1 GROUP BY ${periodo} ORDER BY ${periodo}`
-                        const receitasBD = await new Promise((resolve, reject) => {
-                            pool.query(queryReceitas, periodo == `mes` ? paramsMes : paramsAno, (err, results) => {
-                                if (err) {
-                                    reject(err);
+                                // grava o saldo mensal apenas do ano solicitado
+                                if (anoAtual === Number(ano)) {
+                                    saldoMensal[m] = saldoAcumulado;
                                 }
-                                resolve(results);
-                            });
-                        });
+                            }
 
-                        //Incrementa o saldo do banco adicionando as receitas
-                        if (periodo == `mes`) {
-                            receitasBD.forEach(({ total, mes }) => {
-                                saldoMensal[mes] += total;
-                            });
-                        } else {
-                            receitasBD.forEach(({ total, ano }) => {
-                                saldoAnual[ano - 2024] += total
-                            });
+                            // dezembro fecha o ano
+                            saldoAnual[idxAno] = saldoAcumulado;
                         }
 
-                        //Busca todas receitas fixas do bancos de um determinado ano agrupado por mês
-                        const queryReceitasFixas = `SELECT SUM(valor) AS total, ${periodo} FROM receitas_fixas WHERE banco = ? AND casal = ? ${periodo == `mes` ? `AND ano = ?` : ``} AND status = 1 GROUP BY ${periodo} ORDER BY ${periodo}`
-                        const receitasFixasBD = await new Promise((resolve, reject) => {
-                            pool.query(queryReceitasFixas, periodo == `mes` ? paramsMes : paramsAno, (err, results) => {
-                                if (err) {
-                                    reject(err);
-                                }
-                                resolve(results);
-                            });
-                        });
-
-                        //Incrementa o saldo do banco adicionando as receitas fixas
-                        if (periodo == `mes`) {
-                            receitasFixasBD.forEach(({ total, mes }) => {
-                                saldoMensal[mes] += total;
-                            });
-                        } else {
-                            receitasFixasBD.forEach(({ total, ano }) => {
-                                saldoAnual[ano - 2024] += total
-                            });
-                        }
-
-
-                        //Busca todas despesas dos bancos de um determinado ano agrupado por mês
-                        const queryDespesas = `SELECT SUM(valor) AS total, ${periodo} FROM despesa WHERE banco = ? AND casal = ? ${periodo == `mes` ? `AND ano = ?` : ``} AND status = 1 GROUP BY ${periodo} ORDER BY ${periodo}`
-                        const despesasBD = await new Promise((resolve, reject) => {
-                            pool.query(queryDespesas, periodo == `mes` ? paramsMes : paramsAno, (err, results) => {
-                                if (err) {
-                                    reject(err);
-                                }
-                                resolve(results);
-                            });
-                        });
-
-                        //Incrementa o saldo do banco mes a mes(reduzindo o saldo com as despesas)
-                        if (periodo == `mes`) {
-                            despesasBD.forEach(({ total, mes }) => {
-                                saldoMensal[mes] -= total;
-                            });
-                        } else {
-                            despesasBD.forEach(({ total, ano }) => {
-                                saldoAnual[ano - 2024] -= total
-                            });
-                        }
-
-                        //Busca todas despesas fixas do bancos de um determinado ano agrupado por mês
-                        const queryDespesasFixas = `SELECT SUM(valor) AS total, ${periodo} FROM despesas_fixas WHERE banco = ? AND casal = ? ${periodo == `mes` ? `AND ano = ?` : ``} AND status = 1 GROUP BY ${periodo} ORDER BY ${periodo}`
-                        const despesasFixasBD = await new Promise((resolve, reject) => {
-                            pool.query(queryDespesasFixas, periodo == `mes` ? paramsMes : paramsAno, (err, results) => {
-                                if (err) {
-                                    reject(err);
-                                }
-                                resolve(results);
-                            });
-                        });
-
-                        if (periodo == `mes`) {
-                            despesasFixasBD.forEach(({ total, mes }) => {
-                                saldoMensal[mes] -= total;
-                            });
-                        } else {
-                            despesasFixasBD.forEach(({ total, ano }) => {
-                                saldoAnual[ano - 2024] -= total
-                            });
-                        }
-
-                        const queryTransfDeb = `SELECT SUM(valor) AS total, ${periodo} FROM transferencias WHERE banco_origem = ? AND casal = ? ${periodo == `mes` ? `AND ano = ?` : ``} AND tipo = 0 GROUP BY ${periodo} ORDER BY ${periodo}`
-                        const transfDebBD = await new Promise((resolve, reject) => {
-                            pool.query(queryTransfDeb, periodo == `mes` ? paramsMes : paramsAno, (err, results) => {
-                                if (err) {
-                                    reject(err);
-                                }
-                                resolve(results);
-                            });
-                        });
-
-                        if (periodo == `mes`) {
-                            transfDebBD.forEach(({ total, mes }) => {
-                                saldoMensal[mes] -= total;
-                            });
-                        } else {
-                            transfDebBD.forEach(({ total, ano }) => {
-                                saldoAnual[ano - 2024] -= total
-                            });
-                        }
-
-                        const queryTransfCred = `SELECT SUM(valor) AS total, ${periodo} FROM transferencias WHERE banco_origem = ? AND casal = ? ${periodo == `mes` ? `AND ano = ?` : ``} AND tipo = 1 GROUP BY ${periodo} ORDER BY ${periodo}`
-                        const transfCredBD = await new Promise((resolve, reject) => {
-                            pool.query(queryTransfCred, periodo == `mes` ? paramsMes : paramsAno, (err, results) => {
-                                if (err) {
-                                    reject(err);
-                                }
-                                resolve(results);
-                            });
-                        });
-
-                        if (periodo == `mes`) {
-                            transfCredBD.forEach(({ total, mes }) => {
-                                saldoMensal[mes] += total;
-                            });
-                        } else {
-                            transfCredBD.forEach(({ total, ano }) => {
-                                saldoAnual[ano - 2024] += total
-                            });
-                        }
-
-                        return { receitasBD, despesasBD, transfCredBD, transfDebBD }
-                    }
-
-                    await calculaSaldo(`mes`);
-                    await calculaSaldo(`ano`);
-
-                    //Incrementa os saldos mensais conforme mês anterior
-                    for (let i = 0; i < 12; i++) {
-                        if (i == 0) {
-                            console.log(saldoAnual[qtdAnos - 1])
-                            saldoMensal[i] = saldoAnual[qtdAnos - 1] //Se for janeiro pega o saldo do ano anterior
-                        } else if (saldoMensal[i] === 0) {
-                            saldoMensal[i] = saldoMensal[i - 1] //Se o saldo estiver zerado recebe o saldo do mês anterior
-                        } else {
-                            saldoMensal[i] += saldoMensal[i - 1] //Se não recebe o saldo do mês vigente + mês anterior
-                        }
-                    }
-
-                    for (let i = 1; i < saldoAnual.length; i++) {
-                        if (saldoAnual[i] === 0) {
-                            saldoAnual[i] = saldoAnual[i - 1];
-                        } else {
-                            saldoAnual[i] += saldoAnual[i - 1];
-                        }
-                    }
-
-
-
-                    //console.log({bancoId, saldoInicial, receitasBD, despesasBD, transfCredBD, transfDebBD})
-                    return { bancoNome, bancoId, saldoInicial, bancoTipo, arquivo, saldoAnual, saldoMensal, padrao }
-                }));
-
-                return bancosComSaldo;
+                        return {
+                            bancoNome,
+                            bancoId,
+                            saldoInicial: saldo_inicial,
+                            bancoTipo,
+                            arquivo,
+                            saldoAnual,
+                            saldoMensal,
+                            padrao,
+                        };
+                    })
+                );
             };
 
-            const queryBancoInd = 'SELECT * FROM banco WHERE casal = ? AND usuario = ? AND tipo = 0 AND arquivo = 0';
-            const saldosIndividuais = await getSaldos(queryBancoInd, [casal, usuario]);
-            const saldosParceiro = await getSaldos(queryBancoInd, [casal, parceiro])
+            // ================================
+            // CONSULTAS POR TIPO DE BANCO
+            // ================================
+            const queryBancoInd =
+                'SELECT * FROM banco WHERE casal = ? AND usuario = ? AND tipo = 0 AND arquivo = 0';
 
-            const queryBancoCol = 'SELECT * FROM banco WHERE casal = ? AND tipo = 1 AND arquivo = 0';
+            const queryBancoCol =
+                'SELECT * FROM banco WHERE casal = ? AND tipo = 1 AND arquivo = 0';
+
+            const saldosIndividuais = await getSaldos(queryBancoInd, [casal, usuario]);
+            const saldosParceiro = await getSaldos(queryBancoInd, [casal, parceiro]);
             const saldosColetivos = await getSaldos(queryBancoCol, [casal]);
 
-            return callback(null, { saldosIndividuais, saldosColetivos, saldosParceiro });
+            return callback(null, {
+                saldosIndividuais,
+                saldosParceiro,
+                saldosColetivos,
+            });
         } catch (error) {
-            console.error(`Não foi possível gerar o saldo ${error}`);
+            console.error('Erro ao gerar saldo:', error);
             return callback(error, null);
         }
     };
+
 
 }
 

@@ -96,7 +96,6 @@ class DespesaModel {
                         infoCartao.fech
                     );
 
-
                     // Buscar ou criar a fatura
                     const fatura = await getOrCreateFatura(infoCartao.id, mes, ano);
 
