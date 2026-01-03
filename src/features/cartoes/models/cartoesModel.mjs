@@ -149,7 +149,7 @@ class CartoesModel {
                         faturaFechada: faturaFechada?.total || 0,
                         idFaturaAtual: faturaAtual?.id || null,
                         idFaturaFechada: faturaFechada?.id || null,
-                        statusFatFechada: faturaFechada.status || null
+                        statusFatFechada: faturaFechada?.status || null
                     };
                 })
             );
