@@ -1,15 +1,23 @@
 import { pool } from "../../config/config.mjs";
+import { decrementaUso } from "../../features/assinaturas/utils/decrementaUso.mjs";
+import { incrementaUso } from "../../features/assinaturas/utils/IncrementaUso.mjs";
 
 class CategoriaTrModel {
-    static addCategoriaTr = (nome, tipo, cor, icone, casal, callback) => {
+    static addCategoriaTr = async (nome, tipo, cor, icone, casal, callback) => {
         const query = 'INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, cat_sistema) VALUES (?,?,?,?,?,0)';
-        pool.query(query, [nome, tipo, cor, icone, casal], (err, results) => {
-            if (err) {
-                return callback(err, null)
-            }
+        const categoria = await new Promise((resolve, reject) => {
+            pool.query(query, [nome, tipo, cor, icone, casal], (err, results) => {
+                if (err) {
+                    return callback(err, null)
+                }
 
-            return callback(null, results)
+                resolve(results)
+            })
         })
+
+        await incrementaUso(casal, "categorias")
+
+        return callback(null, categoria)
     }
 
     static loadCategoriaTr = (auth, tipo, callback) => {
@@ -83,16 +91,21 @@ class CategoriaTrModel {
     }
 
     //Só se utiliza esse delete caso a categoria não tenha movimentações atribuidas a ela
-    static deleteCategoriaTr = (auth, id, callback) => {
+    static deleteCategoriaTr = async (auth, id, callback) => {
         const query = 'DELETE FROM categoria_tr WHERE id = ? AND casal = ?';
-        pool.query(query, [id, auth], (err, results) => {
-            if (err) {
-                return callback(err, null)
-            }
-            //console.log(results)
+        const categoria = await new Promisse((resolve, reject) => {
+            pool.query(query, [id, auth], (err, results) => {
+                if (err) {
+                    return callback(err, null)
+                }
 
-            return callback(null, results)
+                resolve(results)
+            })
         })
+
+        await decrementaUso(auth, "categorias")
+
+        return callback(null, categoria)
     }
 
 

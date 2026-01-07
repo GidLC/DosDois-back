@@ -2,7 +2,8 @@ import TagsModel from "../../models/tags/tagsModel.mjs"
 
 const addTags = (req, res) => {
     try {
-        const {auth, nome} = req.body
+        const {nome} = req.body
+        const auth = req.header('auth')
 
         TagsModel.addTag(nome, auth, (err, results) => {
             if (err) {

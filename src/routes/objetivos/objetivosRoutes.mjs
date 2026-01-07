@@ -2,10 +2,11 @@ import express from 'express'
 const objetivoRouter = express.Router()
 import objetivosController from '../../controllers/objetivos/objetivosController.mjs'
 import { autenticarJWT } from '../../middlewares/auth.mjs';
+import { checkModuleLimit, loadPlan } from '../../middlewares/assinatura.mjs';
 
 objetivoRouter.use(autenticarJWT)
 
-objetivoRouter.post('/addObjetivo', objetivosController.addObjetivo)
+objetivoRouter.post('/addObjetivo', loadPlan, checkModuleLimit('objetivos'), objetivosController.addObjetivo)
 objetivoRouter.get('/readObjetivos', objetivosController.readObjetivos)
 objetivoRouter.get('/readObjetivoId', objetivosController.readObjetivoId)
 objetivoRouter.delete('/deleteObjetivo', objetivosController.deleteObjetivo)

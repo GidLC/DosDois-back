@@ -13,10 +13,11 @@ import { fileURLToPath } from 'url';
 import { formataDataBr } from "../../data/formataDataBR/formataDataBR.mjs";
 import { formataFone } from "../../data/formataFone/formataFone.mjs";
 import { JWT_EXPIRES } from "../../data/apiConfig.mjs";
+import { incrementaUso } from "../../features/assinaturas/utils/IncrementaUso.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const getUserData = async (usuario, remember) => {
+const getUserData = async (usuario, remember, plano) => {
   //Verifica casal
   const [casal] = await new Promise((resolve, reject) => {
     const query = 'SELECT * FROM casal WHERE usuario_princ = ? OR usuario_sec = ?';
@@ -51,6 +52,7 @@ const getUserData = async (usuario, remember) => {
       incompleto: usuario.incompleto,
       cod_casal: casal?.cod_casal || null,
       casal_formado: 0,
+      plano,
       whatsPend,
     };
 
@@ -80,6 +82,7 @@ const getUserData = async (usuario, remember) => {
     email_parceiro: parceiro?.email,
     fone_parceiro: parceiro?.fone,
     casal_formado: 1,
+    plano,
     whatsPend,
   };
 
@@ -153,6 +156,8 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, cat_sistema) VALUES("*Ajuste*",1, 3, 37, ?, 1);
   `;
 
+  await incrementaUso(codigoCasal, "categorias", 15)
+
   const queries = queryCategoria.split(";").filter((q) => q.trim() !== "");
   await Promise.all(
     queries.map(
@@ -174,9 +179,12 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
     );
   });
 
+  await incrementaUso(codigoCasal, "bancos")
+
   // Cria vínculo e envia notificações
   const uuid = crypto.randomUUID();
   const url = `https://dosdoisapp.com.br/atribuicao/${codigoCasal}/${uuid}`;
+
   await new Promise((resolve, reject) => {
     pool.query(
       "INSERT INTO vinculos (casal, uuid) VALUES (?, ?)",
@@ -188,6 +196,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
   if (email) {
     await enviaEmail(email, "Cadastro no DosDois", EmailCadastro(nome, codigoCasal, url));
   }
+
   if (fone) {
     await enviaWhats(
       fone,
@@ -201,7 +210,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
 class AuthModel {
   static cadastroUsuario = async (nome, email, senha, fone, dt_criacao, sexo, callback) => {
     try {
-      const user = await criarUsuarioBase({ nome, email, senha, fone, sexo, foto: null });
+      await criarUsuarioBase({ nome, email, senha, fone, sexo, foto: null });
       return callback(null, "Usuário cadastrado com sucesso");
     } catch (error) {
       return callback({ message: `Erro ao cadastrar usuário. ${error}` }, null);
@@ -283,7 +292,7 @@ class AuthModel {
     }
   }
 
-  static loginUsuario = async (email, senha, remember, callback) => {
+  static loginUsuario = async (email, senha, remember, plano, callback) => {
     try {
       const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
 
@@ -298,7 +307,7 @@ class AuthModel {
       if (!usuario) return callback('Usuário não encontrado', null);
 
       await updateLastAccess(usuario.id);
-      const result = await getUserData(usuario, remember);
+      const result = await getUserData(usuario, remember, plano);
 
       return callback(null, result);
     } catch (error) {
@@ -564,7 +573,7 @@ class AuthModel {
 
   //Função para verificar se o WhatsApp do usuário está verificado
   //A variavel origem indica se a origem da requisição foi o APP ou o WhatsApp
-  static async verificaWhats(fone, origem, idUser, callback) {
+  static async verificaWhats(fone, origem, idUser, plano, callback) {
     try {
       const query = `SELECT * FROM usuario WHERE ${origem !== 'app' ? 'fone = ?' : 'id = ?'}`;
       const [usuario] = await new Promise((resolve, reject) => {
@@ -577,7 +586,7 @@ class AuthModel {
       if (!usuario) return callback('nao_encontrado', null);
       if (usuario.whats_verificado == 0) return callback('nao_verificado', null);
 
-      const result = await getUserData(usuario);
+      const result = await getUserData(usuario, null, plano);
       return callback(null, result);
     } catch (error) {
       console.error(`Erro na verificação de WhatsApp: ${error}`);
@@ -585,7 +594,7 @@ class AuthModel {
     }
   }
 
-  static async atualizaUsuario(idUser, callback) {
+  static async atualizaUsuario(idUser, plano, callback) {
     try {
       const [usuario] = await new Promise((resolve, reject) => {
         pool.query('SELECT * FROM usuario WHERE id = ?', [idUser], (err, results) => {
@@ -596,7 +605,7 @@ class AuthModel {
 
       if (!usuario) return callback('Usuário não encontrado', null);
 
-      const result = await getUserData(usuario);
+      const result = await getUserData(usuario, null, plano);
       return callback(null, result);
 
     } catch (error) {
@@ -605,20 +614,20 @@ class AuthModel {
     }
   }
 
-  static async loginGoogle(email, nome, foto, callback) {
+  static async loginGoogle(email, nome, foto, plano, callback) {
     try {
       const queryBusca = "SELECT * FROM usuario WHERE email = ?";
       const [rows] = await pool.promise().query(queryBusca, [email]);
 
       if (rows.length > 0) {
         const user = rows[0];
-        const { token, userData } = await getUserData(user);
+        const { token, userData } = await getUserData(user, null, plano);
         return callback(null, { token, userData });
       }
 
       // Caso o usuário não exista, cria com base no fluxo padrão
       const novoUsuario = await criarUsuarioBase({ nome, email, fone: null, sexo: null, senha: null, foto });
-      const { token, userData } = await getUserData(novoUsuario);
+      const { token, userData } = await getUserData(novoUsuario, null, plano);
 
       return callback(null, { token, userData });
     } catch (err) {

@@ -38,7 +38,7 @@ app.listen(PORT, () => {
 });
 
 //Execução de tarefas recorrentes
-cron.schedule('59 16 * * *', () => {
+cron.schedule('00 00 * * *', () => {
   console.log("Executando cron da Meia noite")
   fechaFaturas()
 })
