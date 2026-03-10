@@ -1,4 +1,4 @@
-import { pool } from "../../../config/config.mjs"
+﻿import { pool } from "../../../config/config.mjs"
 import separaData from "../../../data/SeparaData/SeparaData.mjs"
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs"
 import { incrementaUso } from "../../assinaturas/utils/incrementaUso.mjs"
