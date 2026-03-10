@@ -1,25 +1,37 @@
 import { pool } from "../../config/config.mjs";
+import { decrementaUso } from "../../features/assinaturas/utils/decrementaUso.mjs";
+import { incrementaUso } from "../../features/assinaturas/utils/IncrementaUso.mjs";
 
 class BancoModel {
-    static addBanco = (saldo_inicial, casal, nome, tipo, usuario, callback) => {
+    static addBanco = async (saldo_inicial, casal, nome, tipo, usuario, callback) => {
         if (tipo == 0) {
             const query = 'INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario, arquivo) VALUES (?,?,?,?,?,0)';
-            pool.query(query, [nome, tipo, saldo_inicial, casal, usuario], (err, results) => {
-                if (err) {
-                    return callback(err, null)
-                }
+            const banco = await new Promise((resolve, reject) => {
+                pool.query(query, [nome, tipo, saldo_inicial, casal, usuario], (err, results) => {
+                    if (err) {
+                        return callback(err, null)
+                    }
 
-                return callback(null, results)
+                    resolve(results)
+                })
             })
+
+            await incrementaUso(casal, "bancos")
+
+            return callback(null, banco)
         } else {
             const query = 'INSERT INTO banco (nome, tipo, saldo_inicial, casal, arquivo) VALUES (?,?,?,?,0)';
-            pool.query(query, [nome, tipo, saldo_inicial, casal], (err, results) => {
-                if (err) {
-                    return callback(err, null)
-                }
+            const banco = await new Promise((resolve, reject) => {
+                pool.query(query, [nome, tipo, saldo_inicial, casal], (err, results) => {
+                    if (err) {
+                        return callback(err, null)
+                    }
 
-                return callback(null, results)
+                    resolve(results)
+                })
             })
+
+            await incrementaUso(casal, "bancos")
         }
 
     }
@@ -267,13 +279,26 @@ class BancoModel {
     static arqDesBanco = async (id, casal, arquivo, callback) => {
         try {
             const query = 'UPDATE banco SET arquivo = ? WHERE id = ? AND casal = ?'
-            pool.query(query, [arquivo, id, casal], (err, results) => {
-                if (err) {
-                    return callback(err, null)
-                }
 
-                return callback(null, results)
+            const arqDes = new Promise((resolve, reject) => {
+                pool.query(query, [arquivo, id, casal], (err, results) => {
+                    if (err) {
+                        return callback(err, null)
+                    }
+
+                    resolve(results)
+                })
             })
+
+            //Caso o usuário for arquivar um banco
+            if (Number(arquivo) == 1 ) {
+                await decrementaUso(casal, "bancos")
+            } else { //Caso for desarquivar
+                console.log("incrementando")
+                await incrementaUso(casal, "bancos")
+            }
+
+            return callback(null, arqDes)
         } catch (error) {
             console.error(`Não foi possível realizar essa alteração: ${error}`);
             return callback(error, null);

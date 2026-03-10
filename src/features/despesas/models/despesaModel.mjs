@@ -96,8 +96,8 @@ class DespesaModel {
                         infoCartao.fech
                     );
 
-                // Buscar ou criar a fatura
-                const fatura = await getOrCreateFatura(infoCartao.id, mes, ano);
+                    // Buscar ou criar a fatura
+                    const fatura = await getOrCreateFatura(infoCartao.id, mes, ano);
 
                     promisses.push(new Promise((resolve, reject) => {
                         const query = `

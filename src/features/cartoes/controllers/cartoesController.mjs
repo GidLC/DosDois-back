@@ -2,8 +2,9 @@ import CartoesModel from "../models/cartoesModel.mjs";
 
 const addCartao = (req, res) => {
     const { nome, usuario, bandeira, limite, fech, venc, cor, disp, banco } = req.body
+    const casal = req.header('auth')
 
-    CartoesModel.addCartao(nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, (err, results) => {
+    CartoesModel.addCartao(nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, (err, results) => {
         if (err) {
             console.error('Erro ao cadastrar cartão', err);
             return res.status(500).json({ error: 'Erro ao cadastrar cartão' });

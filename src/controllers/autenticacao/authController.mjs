@@ -8,6 +8,7 @@ const client = new OAuth2Client("948441988435-1jfcovgkbnmckon47bvuntfkhhf3nts7.a
 //Sem autenticação
 const loginUsuario = (req, res) => {
   const { email, senha, remember } = req.body;
+
   AuthModel.loginUsuario(email, senha, remember, (err, resultado) => {
     if (err) {
       console.error('Erro ao encontrar  usuário:', err);
@@ -161,8 +162,9 @@ const getPerfil = (req, res) => {
 
 const verificaWhats = (req, res) => {
   const { fone, origem, idUser } = req.query
+  const plano = req.plano
 
-  AuthModel.verificaWhats(fone, origem, idUser, (err, results) => {
+  AuthModel.verificaWhats(fone, origem, idUser, plano, (err, results) => {
     if (err) {
       return res.status(500).json({ message: `Não foi possível validar seu whatsapp.`, err })
     }
@@ -173,8 +175,9 @@ const verificaWhats = (req, res) => {
 
 const atualizaUsuario = (req, res) => {
   const { idUser } = req.query
+  const plano = req.plano
 
-  AuthModel.atualizaUsuario(idUser, (err, results) => {
+  AuthModel.atualizaUsuario(idUser, plano, (err, results) => {
     if (err) {
       return res.status(500).json({ message: `Não foi possível atualizar as informações.`, err })
     }
@@ -186,6 +189,7 @@ const atualizaUsuario = (req, res) => {
 const loginGoogle = async (req, res) => {
   try {
     const { tokenGoogle } = req.body;
+    const plano = req.plano
 
     // Valida o token com o Google
     const ticket = await client.verifyIdToken({
@@ -196,7 +200,7 @@ const loginGoogle = async (req, res) => {
     const payload = ticket.getPayload();
     const { email, name, picture } = payload;
 
-    AuthModel.loginGoogle(email, name, picture, (err, resultado) => {
+    AuthModel.loginGoogle(email, name, picture, plano, (err, resultado) => {
       if (err) {
         console.error("Erro ao autenticar via Google:", err);
         return res.status(500).json({ message: `Erro ao autenticar via Google: ${err}` });

@@ -130,4 +130,5 @@ dist
 #Arquivos sensíveis
 apiConfig.mjs
 dbConfig.mjs
+mpToken.js
 /src/uploads
