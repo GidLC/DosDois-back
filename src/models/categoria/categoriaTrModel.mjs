@@ -1,6 +1,6 @@
 import { pool } from "../../config/config.mjs";
 import { decrementaUso } from "../../features/assinaturas/utils/decrementaUso.mjs";
-import { incrementaUso } from "../../features/assinaturas/utils/IncrementaUso.mjs";
+import { incrementaUso } from "../../features/assinaturas/utils/incrementaUso.mjs";
 
 class CategoriaTrModel {
     static addCategoriaTr = async (nome, tipo, cor, icone, casal, callback) => {

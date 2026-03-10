@@ -1,3 +1,4 @@
+import { checkModuleLimit } from "../../middlewares/assinatura.mjs";
 import BancoModel from "../../models/banco/bancoModel.mjs";
 
 const addBanco = (req, res) => {
@@ -81,6 +82,11 @@ const arqDesBanco = (req, res) => {
     const casal = req.header('auth')
     const id = req.header('id')
     const arquivo = req.header('arquivo')
+
+    //Se estiver desarquivando o banco
+    if (arquivo == 0) {
+        checkModuleLimit("bancos", casal)
+    }
 
     BancoModel.arqDesBanco(id, casal, arquivo, (err, results) => {
         if (err) {

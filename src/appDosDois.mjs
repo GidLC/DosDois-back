@@ -15,6 +15,7 @@ import objetivoRouter from './routes/objetivos/objetivosRoutes.mjs';
 import tagsRouter from './routes/tags/tagsRoutes.mjs';
 import cartoesRouter from './features/cartoes/routes/cartoesRoutes.mjs';
 import { fechaFaturas } from './jobs/fechaFaturas.mjs';
+import assinaturasRouter from './features/assinaturas/routes/assinaturasRoutes.mjs';
 
 app.use('/apiDDv1/auth', authRouter);
 app.use('/apiDDv1/receita', receitaRouter);
@@ -30,6 +31,7 @@ app.use('/apiDDv1/transf', transfRouter);
 app.use('/apiDDv1/objetivos', objetivoRouter);
 app.use('/apiDDv1/tags', tagsRouter);
 app.use('/apiDDv1/cartoes', cartoesRouter)
+app.use('/apiDDv1/subs', assinaturasRouter)
 
 const PORT = process.env.PORT || 3000;
 

@@ -252,7 +252,7 @@ class SaldosModel {
 
                                 //Incrementa os valores de cada receita
                                 rows.forEach(({ mes, total }) => {
-                                    movimentosMes[mes - 1] += sinal * Number(total);
+                                    movimentosMes[mes] += sinal * Number(total);
                                 });
                             }
 

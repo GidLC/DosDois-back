@@ -14,10 +14,11 @@ import { formataDataBr } from "../../data/formataDataBR/formataDataBR.mjs";
 import { formataFone } from "../../data/formataFone/formataFone.mjs";
 import { JWT_EXPIRES } from "../../data/apiConfig.mjs";
 import { incrementaUso } from "../../features/assinaturas/utils/IncrementaUso.mjs";
+import { loadPlanFunction } from "../../middlewares/assinatura.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const getUserData = async (usuario, remember, plano) => {
+const getUserData = async (usuario, remember) => {
   //Verifica casal
   const [casal] = await new Promise((resolve, reject) => {
     const query = 'SELECT * FROM casal WHERE usuario_princ = ? OR usuario_sec = ?';
@@ -26,6 +27,9 @@ const getUserData = async (usuario, remember, plano) => {
       else resolve(results);
     });
   });
+
+  const plano = await loadPlanFunction(casal.cod_casal)
+  console.log(plano)
 
   //Verifica pendência de WhatsApp
   let whatsPend = false;
@@ -292,7 +296,7 @@ class AuthModel {
     }
   }
 
-  static loginUsuario = async (email, senha, remember, plano, callback) => {
+  static loginUsuario = async (email, senha, remember, callback) => {
     try {
       const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
 
@@ -307,7 +311,7 @@ class AuthModel {
       if (!usuario) return callback('Usuário não encontrado', null);
 
       await updateLastAccess(usuario.id);
-      const result = await getUserData(usuario, remember, plano);
+      const result = await getUserData(usuario, remember);
 
       return callback(null, result);
     } catch (error) {

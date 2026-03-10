@@ -1,6 +1,7 @@
 import { pool } from "../../../config/config.mjs"
 import separaData from "../../../data/SeparaData/SeparaData.mjs"
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs"
+import { incrementaUso } from "../../assinaturas/utils/incrementaUso.mjs"
 import DespesaModel from "../../despesas/models/despesaModel.mjs"
 import { despesasQueryBuilder } from "../../despesas/utils/despesasQueryBuilder.mjs"
 import { calcLimiteDisp } from "../utils/calcLimiteDisp.mjs"
@@ -9,13 +10,13 @@ const data = new Date()
 const dataBR = await separaData(data)
 
 class CartoesModel {
-    static addCartao = async (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, callback) => {
+    static addCartao = async (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, callback) => {
         try {
 
-            const queryCartao = 'INSERT INTO cartoes (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco) VALUES(?,?,?,?,?,?,?,?,?)'
+            const queryCartao = 'INSERT INTO cartoes (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal) VALUES(?,?,?,?,?,?,?,?,?,?)'
 
             const cartao = await new Promise((resolve, reject) => {
-                pool.query(queryCartao, [nome, usuario, bandeira, limite, fech, venc, cor, disp, banco], (err, results) => {
+                pool.query(queryCartao, [nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal], (err, results) => {
                     if (err) {
                         reject(err)
                     }
@@ -38,6 +39,8 @@ class CartoesModel {
                     resolve(results)
                 })
             })
+
+            await incrementaUso(casal, "cartoes")
 
             return callback(null, cartao)
         } catch (error) {

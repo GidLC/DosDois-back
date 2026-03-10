@@ -1,18 +1,27 @@
 import { pool } from "../../config/config.mjs"
+import { decrementaUso } from "../../features/assinaturas/utils/decrementaUso.mjs"
+import { incrementaUso } from "../../features/assinaturas/utils/incrementaUso.mjs"
 
 class TagsModel {
     static addTag = async (nome, casal, callback) => {
         try {
             const query = 'INSERT INTO tags (nome, casal) VALUES (?,?)'
 
-            pool.query(query, [nome, casal], (err, results) => {
-                if (err) {
-                    return callback(err, null)
-                }
+            const tag = await new Promise((resolve, reject) => {
+                pool.query(query, [nome, casal], (err, results) => {
+                    if (err) {
+                        return callback(err, null)
+                    }
 
-                return callback(null, results)
+                    resolve(results)
+                })
             })
+
+            await incrementaUso(casal, "tags")
+
+            return callback(null, tag)
         } catch (error) {
+            console.error(error)
             throw error
         }
     }
@@ -68,16 +77,21 @@ class TagsModel {
 
     static deleteTag = async (idTag, casal, callback) => {
         try {
-            console.log(idTag, casal)
             const query = `DELETE FROM tags WHERE id = ? AND casal = ?`
 
-            pool.query(query, [idTag, casal], (err, results) => {
-                if (err) {
-                    return callback(err, null)
-                }
+            const resp = await new Promise((resolve, reject) => {
+                pool.query(query, [idTag, casal], (err, results) => {
+                    if (err) {
+                        return callback(err, null)
+                    }
 
-                return callback(null, results)
+                    resolve(results)
+                })
             })
+
+            await decrementaUso(casal, "tags")
+
+            return callback(null, resp)
         } catch (error) {
             throw error
         }
@@ -86,7 +100,7 @@ class TagsModel {
     static readTagsByTermo = async (termo, casal, callback) => {
         try {
             const query = 'SELECT id, nome FROM tags WHERE nome LIKE ? AND casal = ?'
-            
+
             const searchTerm = `%${termo}%`
             pool.query(query, [searchTerm, casal], (err, results) => {
                 if (err) {

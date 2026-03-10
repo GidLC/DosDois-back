@@ -8,9 +8,8 @@ const client = new OAuth2Client("948441988435-1jfcovgkbnmckon47bvuntfkhhf3nts7.a
 //Sem autenticação
 const loginUsuario = (req, res) => {
   const { email, senha, remember } = req.body;
-  const plano = req.plano
 
-  AuthModel.loginUsuario(email, senha, remember, plano, (err, resultado) => {
+  AuthModel.loginUsuario(email, senha, remember, (err, resultado) => {
     if (err) {
       console.error('Erro ao encontrar  usuário:', err);
       return res.status(500).json({ message: `Erro ao realizar login: ${err}` });

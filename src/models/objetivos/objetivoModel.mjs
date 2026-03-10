@@ -1,17 +1,25 @@
 import { pool } from "../../config/config.mjs";
 import separaData from "../../data/SeparaData/SeparaData.mjs";
+import { decrementaUso } from "../../features/assinaturas/utils/decrementaUso.mjs";
+import { incrementaUso } from "../../features/assinaturas/utils/incrementaUso.mjs";
 
 class ObjetivoModel {
-    static addObjetivo = (descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone, callback) => {
+    static addObjetivo = async (descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone, callback) => {
         const query = 'INSERT INTO objetivo (descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone) VALUES (?,?,?,?,?,?,?,?)'
 
-        pool.query(query, [descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone], (err, results) => {
-            if (err) {
-                return callback(err, null)
-            }
+        const objetivo = await new Promisse((resolve, reject) => {
+            pool.query(query, [descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone], (err, results) => {
+                if (err) {
+                    return callback(err, null)
+                }
 
-            return callback(null, results)
+                resolve(results)
+            })
         })
+
+        await incrementaUso(casal, 'objetivos')
+
+        return callback(null, objetivo)
     }
 
     static readObjetivos = async (casal, status, callback) => {
@@ -92,16 +100,20 @@ class ObjetivoModel {
         }
     }
 
-    static deleteObjetivo = (id, casal, callback) => {
+    static deleteObjetivo = async (id, casal, callback) => {
         const query = 'DELETE FROM objetivo WHERE id = ? AND casal = ?';
 
-        pool.query(query, [id, casal], (err, results) => {
-            if (err) {
-                return callback(err, null)
-            }
+        const rep = await new Promisse((resolve, reject) => {
+            pool.query(query, [id, casal], (err, results) => {
+                if (err) {
+                    return callback(err, null)
+                }
 
-            return callback(null, results)
+                resolve(results)
+            })
         })
+
+        await decrementaUso(casal, "objetivos")
     }
 
     static aporteValor = (objetivoId, valor, casal, callback) => {
