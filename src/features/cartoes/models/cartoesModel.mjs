@@ -72,7 +72,7 @@ class CartoesModel {
              * 1. Buscar cartões do usuário
              * --------------------------------------------------*/
             const queryCartoes = `
-            SELECT car.id_cartao AS id, car.nome, car.fech, car.venc, car.limite, car.banco, car.disp, car.bandeira as idBandeira,
+            SELECT car.id_cartao AS id, car.nome, car.fech, car.venc, car.limite, car.banco, car.disp, car.bandeira as idBandeira, car.arquivo,
                    cor.codigo AS codCor, cor.id AS idCor, band.nome AS nomeBandeira
             FROM cartoes AS car
             INNER JOIN cor ON car.cor = cor.id
@@ -148,6 +148,7 @@ class CartoesModel {
                         idCor: cartao.idCor,
                         banco: cartao.banco,
                         disp: cartao.disp,
+                        arquivo: cartao.arquivo,
                         faturaAtual: faturaAtual?.total || 0,
                         faturaFechada: faturaFechada?.total || 0,
                         idFaturaAtual: faturaAtual?.id || null,
@@ -236,11 +237,11 @@ class CartoesModel {
         }
     }
 
-    static editCartao = async (id, nome, banco, bandeira, limite, fech, venc, cor, callback) => {
+    static editCartao = async (id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, callback) => {
         try {
             //O valor do limite não pode ser menor que o valor das faturas abertas
-            const queryEdit = `UPDATE cartoes SET nome = ?, banco = ?, bandeira = ?, limite = ?, fech = ?, venc = ?, cor = ? WHERE id_cartao = ?`;
-            await queryAsync(queryEdit, [nome, banco, bandeira, limite, fech, venc, cor, id])
+            const queryEdit = `UPDATE cartoes SET nome = ?, banco = ?, bandeira = ?, limite = ?, fech = ?, venc = ?, cor = ?, arquivo = ? WHERE id_cartao = ?`;
+            await queryAsync(queryEdit, [nome, banco, bandeira, limite, fech, venc, cor, arquivo, id])
 
             return callback(null, 'EDITADA')
         } catch (error) {

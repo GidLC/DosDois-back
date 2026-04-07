@@ -35,7 +35,7 @@ class CategoriaTrModel {
     }
 
     static loadCategoriasSistema = (auth, callback) => {
-        const query = 'SELECT id, nome FROM categoria_tr WHERE casal = ? AND cat_sistema = 1 ORDER BY tipo'
+        const query = 'SELECT id, nome, tipo FROM categoria_tr WHERE casal = ? AND cat_sistema = 1 ORDER BY tipo'
         pool.query(query, [auth], (err, results) => {
             if (err) {
                 return callback(err, results)
