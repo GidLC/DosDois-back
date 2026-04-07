@@ -1,5 +1,6 @@
 export const MP_PLANS = {
   PREMIUM_MONTHLY: {
+    id: 2,
     codigo: 'premium',
     nome: "Premium Mensal",
     valor: 5.00,
@@ -8,6 +9,7 @@ export const MP_PLANS = {
     mpPlanId: "732ff158ad9f403faae3843d25108c60"
   },
   PREMIUM_YEARLY: {
+    id: 2,
     codigo: 'premium',
     nome: "Premium Anual",
     frequency: 12,

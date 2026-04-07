@@ -33,6 +33,7 @@ class DespesaModel {
 
             const valorReal = (Number(parcelado) == 1) ? Number(valor) : (Number(valor) / Number(parcelado))
             if (Number(parcelado) > 1) repetir = Number(parcelado)
+                console.log(parcelado)
 
             //Cria identificador para as parcelas
             const uuid_parcela = (repetir > 1) ? crypto.randomUUID() : null

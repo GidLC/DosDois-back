@@ -29,11 +29,10 @@ class AssinaturaModel {
             });
 
             const data = await response.json();
-            console.log(data)
 
             await queryAsync(`
-                UPDATE assinaturas SET status = ?, mp_status = ?, mp_preapproval_id = ?, created_at = ?, updated_at = ? WHERE casal = ?`,
-                ["pendente", data.status, data.id, data.date_created, data.last_modified, data.external_reference])
+                UPDATE assinaturas SET plano_id = ? status = ?, mp_status = ?, mp_preapproval_id = ?, created_at = ?, updated_at = ? WHERE casal = ?`,
+                [plan.id, "pendente", data.status, data.id, data.date_created, data.last_modified, data.external_reference])
 
             if (!response.ok) {
                 console.error("Erro Mercado Pago:", data);
