@@ -10,13 +10,13 @@ const data = new Date()
 const dataBR = await separaData(data)
 
 class CartoesModel {
-    static addCartao = async (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, callback) => {
+    static addCartao = async (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, padrao, callback) => {
         try {
 
-            const queryCartao = 'INSERT INTO cartoes (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal) VALUES(?,?,?,?,?,?,?,?,?,?)'
+            const queryCartao = 'INSERT INTO cartoes (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
 
             const cartao = await new Promise((resolve, reject) => {
-                pool.query(queryCartao, [nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal], (err, results) => {
+                pool.query(queryCartao, [nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, padrao], (err, results) => {
                     if (err) {
                         reject(err)
                     }
@@ -237,11 +237,20 @@ class CartoesModel {
         }
     }
 
-    static editCartao = async (id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, callback) => {
+    static editCartao = async (id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, callback) => {
         try {
             //O valor do limite não pode ser menor que o valor das faturas abertas
-            const queryEdit = `UPDATE cartoes SET nome = ?, banco = ?, bandeira = ?, limite = ?, fech = ?, venc = ?, cor = ?, arquivo = ? WHERE id_cartao = ?`;
-            await queryAsync(queryEdit, [nome, banco, bandeira, limite, fech, venc, cor, arquivo, id])
+
+            const queryFaturas = `SELECT SUM(total) as valor FROM cartao_faturas WHERE cartao_id = ? AND status != 'paga'`
+            const [faturas] = await queryAsync(queryFaturas, [id])
+            
+            if (limite < faturas.valor) {
+                return callback(`O novo limite não pode ser menor que as despesas no cartão`, null)
+            }
+            
+            const queryEdit = `UPDATE cartoes SET nome = ?, banco = ?, bandeira = ?, limite = ?, fech = ?, venc = ?, cor = ?, arquivo = ?, disp = ? WHERE id_cartao = ?`;
+            await queryAsync(queryEdit, [nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, id])
+
 
             return callback(null, 'EDITADA')
         } catch (error) {

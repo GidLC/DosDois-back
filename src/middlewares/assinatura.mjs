@@ -12,8 +12,6 @@ export const loadPlan = async (req, res, next) => {
       AND a.status = 'ativa'
   `, [auth]);
 
-    console.log(auth)
-
     req.plano = assinatura || { codigo: 'FREE' };
 
     next();
@@ -60,6 +58,8 @@ export const checkModuleLimit = (moduleCode, permitir = null) => {
       JOIN planos_limites as pm ON pm.plano_id = a.plano_id
       WHERE a.casal = ? AND pm.modulo = ?
     `, [auth, module.id]);
+
+    console.log({auth, id: module.id})
 
         //Se não foi encontrado o módulo ou não está ativo
         if (!planModule || !planModule.ativo) {
