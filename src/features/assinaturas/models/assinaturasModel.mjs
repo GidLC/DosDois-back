@@ -100,6 +100,18 @@ class AssinaturaModel {
     `, [statusDB, mpId]
         )
     };
+
+    static getOfertas = async (callback) => {
+        try {
+            const queryOfertas = `SELECT * FROM planos_ofertas WHERE ativo = 1`
+
+            const ofertas = await queryAsync(queryOfertas)
+
+            return callback(null, ofertas)
+        } catch (error) {
+            return callback(error, null)
+        }
+    }
 }
 
 export default AssinaturaModel;

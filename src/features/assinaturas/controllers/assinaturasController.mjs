@@ -77,4 +77,15 @@ const mpWebHook = async (req, res) => {
     }
 };
 
-export default { createAssinatura, mpWebHook }
+const getOfertas = async (req, res) => {
+    AssinaturaModel.getOfertas((err, results) => {
+        if (err) {
+            console.error('Erro ao  buscar ofertas', err);
+            return res.status(500).json({ error: 'Erro ao buscar ofertas' });
+        }
+
+        res.status(200).json({ message: 'Ofertas encontradas com sucesso', results});
+    })
+}
+
+export default { createAssinatura, mpWebHook, getOfertas }

@@ -1,10 +1,10 @@
 import CartoesModel from "../models/cartoesModel.mjs";
 
 const addCartao = (req, res) => {
-    const { nome, usuario, bandeira, limite, fech, venc, cor, disp, banco } = req.body
+    const { nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, padrao } = req.body
     const casal = req.header('auth')
 
-    CartoesModel.addCartao(nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, (err, results) => {
+    CartoesModel.addCartao(nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, padrao, (err, results) => {
         if (err) {
             console.error('Erro ao cadastrar cartão', err);
             return res.status(500).json({ error: 'Erro ao cadastrar cartão' });
@@ -49,12 +49,12 @@ const pagarFatura = (req, res) => {
 }
 
 const editCartao = (req, res) => {
-    const { id, nome, banco, bandeira, limite, fech, venc, cor, arquivo } = req.body
+    const { id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp } = req.body
 
-    CartoesModel.editCartao(id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, (err, results) => {
+    CartoesModel.editCartao(id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, (err, results) => {
         if (err) {
             console.error('Não foi possível editar o cartão', err);
-            return res.status(500).json({ error: 'Não foi possível editar o cartão' });
+            return res.status(500).json({ error: `Não foi possível editar o cartão. ${err}` });
         }
         res.status(200).json({ message: 'Cartão editado com sucesso', results })
     })
