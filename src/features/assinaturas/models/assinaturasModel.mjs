@@ -1,22 +1,49 @@
 import { formataDataBr } from "../../../data/formataDataBR/formataDataBR.mjs";
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
 import separaData from "../../../data/SeparaData/SeparaData.mjs";
-import { ACESS_TOKEN_TEST } from "../mpToken.mjs";
+import { MP_ACCESS_TOKEN } from "../mpToken.mjs";
 import { MP_PLANS } from "../utils/MP_PLANS.mjs";
 
 class AssinaturaModel {
+    static getOfertaAtiva = async (codigo) => {
+        const [oferta] = await queryAsync(`
+            SELECT *
+            FROM planos_ofertas
+            WHERE codigo = ?
+              AND ativo = 1
+              AND (inicio_vigencia IS NULL OR inicio_vigencia <= NOW())
+              AND (fim_vigencia IS NULL OR fim_vigencia >= NOW())
+            ORDER BY prioridade DESC
+            LIMIT 1
+        `, [codigo])
+
+        return oferta
+    }
+
     static createAssinatura = async (planKey, casal, email, token, callback) => {
         try {
-            const plan = MP_PLANS[planKey];
+            if (!MP_ACCESS_TOKEN) {
+                return callback("MP_ACCESS_TOKEN_NOT_CONFIGURED", null);
+            }
 
-            if (!plan) {
+            const oferta = await this.getOfertaAtiva(planKey);
+            const planFallback = MP_PLANS[planKey];
+            const plan = {
+                id: oferta?.plano_id || planFallback?.id,
+                mpPlanId: oferta?.mp_plan_id || oferta?.mpPlanId || planFallback?.mpPlanId,
+                codigo: oferta?.codigo || planFallback?.codigo,
+                valor: oferta?.valor || planFallback?.valor,
+                periodicidade: oferta?.periodicidade,
+            };
+
+            if (!plan.id || !plan.mpPlanId) {
                 return callback("INVALID_PLAN", null);
             }
 
             const response = await fetch("https://api.mercadopago.com/preapproval", {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${ACESS_TOKEN_TEST}`,
+                    "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
@@ -30,13 +57,28 @@ class AssinaturaModel {
 
             const data = await response.json();
 
-            await queryAsync(`
-                UPDATE assinaturas SET plano_id = ? status = ?, mp_status = ?, mp_preapproval_id = ?, created_at = ?, updated_at = ? WHERE casal = ?`,
-                [plan.id, "pendente", data.status, data.id, data.date_created, data.last_modified, data.external_reference])
-
             if (!response.ok) {
                 console.error("Erro Mercado Pago:", data);
                 return callback(data, null);
+            }
+
+            const update = await queryAsync(`
+                UPDATE assinaturas
+                SET plano_id = ?,
+                    status = ?,
+                    mp_status = ?,
+                    mp_preapproval_id = ?,
+                    created_at = ?,
+                    updated_at = ?
+                WHERE casal = ?`,
+                [plan.id, "pendente", data.status, data.id, data.date_created, data.last_modified, casal])
+
+            if (!update.affectedRows) {
+                await queryAsync(`
+                    INSERT INTO assinaturas
+                        (casal, plano_id, status, mp_status, mp_preapproval_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [casal, plan.id, "pendente", data.status, data.id, data.date_created, data.last_modified])
             }
 
             return callback(null, data);

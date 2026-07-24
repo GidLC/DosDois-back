@@ -1,1 +1,3 @@
-export const ACESS_TOKEN_TEST = 'APP_USR-4099262712682241-010709-0c04297fe196667cd102c21227f906c2-431787730'
+import 'dotenv/config';
+
+export const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
