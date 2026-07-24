@@ -1,10 +1,61 @@
 import AssinaturaModel from "../models/assinaturasModel.mjs";
-import { ACESS_TOKEN_TEST } from "../mpToken.mjs";
+import jwt from "jsonwebtoken";
+import { JWT_SECRET } from "../../../data/apiConfig.mjs";
+import { MP_ACCESS_TOKEN } from "../mpToken.mjs";
+
+const createCheckout = async (req, res) => {
+    try {
+        const { offerId, planKey } = req.body
+        const codigoOferta = offerId || planKey
+        const auth = req.authContext
+
+        if (!auth?.cod_casal || !codigoOferta) {
+            return res.status(400).json({ error: 'CHECKOUT_INVALIDO' })
+        }
+
+        const oferta = await AssinaturaModel.getOfertaAtiva(codigoOferta)
+
+        if (!oferta) {
+            return res.status(404).json({ error: 'OFERTA_INDISPONIVEL' })
+        }
+
+        const checkoutToken = jwt.sign(
+            {
+                purpose: 'checkout',
+                cod_casal: auth.cod_casal,
+                userId: auth.id,
+                offerId: oferta.codigo,
+            },
+            JWT_SECRET,
+            { expiresIn: '15m' },
+        )
+
+        return res.status(200).json({
+            message: 'Checkout criado com sucesso',
+            checkoutToken,
+        })
+    } catch (error) {
+        console.error('Erro ao criar checkout', error)
+        return res.status(500).json({ error: 'Erro ao criar checkout' })
+    }
+}
 
 const createAssinatura = (req, res) => {
-    const { casal, email, planKey, token } = req.body
+    const { email, token, checkoutToken } = req.body
 
-    AssinaturaModel.createAssinatura(planKey, casal, email, token, (err, results) => {
+    let checkout
+
+    try {
+        checkout = jwt.verify(checkoutToken, JWT_SECRET)
+    } catch {
+        return res.status(401).json({ error: 'CHECKOUT_EXPIRADO_OU_INVALIDO' })
+    }
+
+    if (checkout.purpose !== 'checkout' || !checkout.cod_casal || !checkout.offerId) {
+        return res.status(401).json({ error: 'CHECKOUT_INVALIDO' })
+    }
+
+    AssinaturaModel.createAssinatura(checkout.offerId, checkout.cod_casal, email, token, (err, results) => {
         if (err) {
             console.error('Erro ao registrar assinatura', err);
             return res.status(500).json({ error: 'Erro ao registrar assinatura' });
@@ -15,12 +66,16 @@ const createAssinatura = (req, res) => {
 }
 
 const getAssinaturaMP = async (id) => {
+    if (!MP_ACCESS_TOKEN) {
+        throw new Error("MP_ACCESS_TOKEN não configurado");
+    }
+
     const response = await fetch(
         `https://api.mercadopago.com/preapproval/${id}`,
         {
             method: "GET",
             headers: {
-                Authorization: `Bearer ${ACESS_TOKEN_TEST}`,
+                Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
                 "Content-Type": "application/json"
             }
         }
@@ -38,7 +93,7 @@ const mpWebHook = async (req, res) => {
 
         const { type, data } = req.body;
 
-        console.log("Webhook recebido:", req.body);
+        console.log("Webhook Mercado Pago recebido", { type, id: data?.id });
 
         if (type !== "subscription_preapproval") {
             return res.sendStatus(200);
@@ -56,8 +111,6 @@ const mpWebHook = async (req, res) => {
 
         //Busca a assinatura no banco de dados pelo código da assinatura MP
         const assinatura = await AssinaturaModel.buscarAssinaturaPorMPId(preapprovalId);
-        console.log(assinatura)
-
         if (!assinatura) {
             console.warn("Assinatura não encontrada:", preapprovalId);
             return res.sendStatus(200);
@@ -88,4 +141,4 @@ const getOfertas = async (req, res) => {
     })
 }
 
-export default { createAssinatura, mpWebHook, getOfertas }
+export default { createCheckout, createAssinatura, mpWebHook, getOfertas }

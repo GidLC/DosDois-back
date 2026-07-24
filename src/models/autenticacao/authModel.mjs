@@ -15,8 +15,28 @@ import { formataFone } from "../../data/formataFone/formataFone.mjs";
 import { JWT_EXPIRES } from "../../data/apiConfig.mjs";
 import { incrementaUso } from "../../features/assinaturas/utils/IncrementaUso.mjs";
 import { loadPlanFunction } from "../../middlewares/assinatura.mjs";
+import { hashPassword, verifyPassword } from "../../data/security/passwordHash.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const MAX_PROFILE_IMAGE_BYTES = Number(process.env.MAX_PROFILE_IMAGE_BYTES ?? 2 * 1024 * 1024);
+const ALLOWED_PROFILE_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
+
+const hasExpectedImageSignature = (buffer, ext) => {
+  if (['jpg', 'jpeg'].includes(ext)) {
+    return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+
+  if (ext === 'png') {
+    return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+
+  if (ext === 'webp') {
+    return buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  }
+
+  return false;
+};
 
 const getUserData = async (usuario, remember) => {
   //Verifica casal
@@ -108,7 +128,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
   // Cria código exclusivo do casal
   const codigoCasal = crypto.randomBytes(3).toString("hex");
   const senhaHash = senha
-    ? crypto.createHash("sha256").update(senha).digest("hex")
+    ? await hashPassword(senha)
     : null;
 
   // Cria usuário
@@ -225,7 +245,7 @@ class AuthModel {
   //Realizar uma validação de vinculação mais segura, como solicitar o email do parceiro principal
   static vincCadastro = async (nome, email, senha, cod_casal, fone, sexo, uuid, callback) => {
     try {
-      const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
+      const senhaHash = await hashPassword(senha);
 
       //Insere usuário na tabela
       const queryUsuario = `INSERT INTO usuario (nome, email, senha, casal, dt_criacao, fone, sexo) 
@@ -298,17 +318,28 @@ class AuthModel {
 
   static loginUsuario = async (email, senha, remember, callback) => {
     try {
-      const senhaHash = crypto.createHash('sha256').update(senha).digest('hex');
-
       const [usuario] = await new Promise((resolve, reject) => {
-        const query = 'SELECT * FROM usuario WHERE email = ? AND senha = ?';
-        pool.query(query, [email, senhaHash], (err, results) => {
+        const query = 'SELECT * FROM usuario WHERE email = ?';
+        pool.query(query, [email], (err, results) => {
           if (err) reject(err);
           else resolve(results);
         });
       });
 
       if (!usuario) return callback('Usuário não encontrado', null);
+
+      const senhaValidada = await verifyPassword(senha, usuario.senha);
+      if (!senhaValidada.valid) return callback('Usuário não encontrado', null);
+
+      if (senhaValidada.needsRehash) {
+        const novoHash = await hashPassword(senha);
+        await new Promise((resolve, reject) => {
+          pool.query('UPDATE usuario SET senha = ? WHERE id = ?', [novoHash, usuario.id], (err, results) => {
+            if (err) return reject(err);
+            resolve(results);
+          });
+        });
+      }
 
       await updateLastAccess(usuario.id);
       const result = await getUserData(usuario, remember);
@@ -323,11 +354,17 @@ class AuthModel {
   //Usado para trocar a senha no APP
   static gerarToken = async ({ fone, tipo }, callback) => {
     try {
-      const token = crypto.randomBytes(2).toString('hex');
+      if (!['login', 'senha'].includes(tipo)) {
+        return callback("Tipo de token inválido", null);
+      }
+
+      const token = tipo === "senha"
+        ? crypto.randomBytes(32).toString('hex')
+        : crypto.randomInt(100000, 1000000).toString();
       const uuid = tipo === "senha" ? crypto.randomUUID() : null; //Só cria UUID no caso de trocar a senha
 
       const data = new Date()
-      const validade = new Date(data.getTime() + 2 * 60 * 60 * 1000).toISOString();
+      const validade = new Date(data.getTime() + 30 * 60 * 1000).toISOString();
       const v = await separaData(validade)
       const momento = `${v.ano}-${v.mes + 1}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
 
@@ -380,6 +417,7 @@ class AuthModel {
   };
 
   static validaToken = async ({ fone, token, uuid, tipo }, callback) => {
+    console.log({fone, token, uuid, tipo})
     const data = new Date();
     const v = await separaData(data);
     const momento = `${v.ano}-${v.mes}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`;
@@ -437,6 +475,8 @@ class AuthModel {
         });
       });
 
+      console.log(user)
+
       if (user) {
         return callback(null, user)
       }
@@ -445,40 +485,50 @@ class AuthModel {
 
 
   static mudaSenha = async (id, novaSenha, token, callback) => {
+    const connection = await pool.promise().getConnection();
     try {
-      const senhaHash = crypto.createHash('sha256').update(novaSenha).digest('hex');
+      await connection.beginTransaction();
 
-      const querySenha = 'UPDATE usuario SET senha = ? WHERE id = ?';
-      await new Promise((resolve, reject) => {
-        pool.query(querySenha, [senhaHash, id], (err, results) => {
-          if (err) {
-            reject(err);
-          }
+      const [tokens] = await connection.query(
+        `SELECT id_usuario
+         FROM senha_temp
+         WHERE id_usuario = ?
+           AND token = ?
+           AND tipo = 'senha'
+           AND validade > NOW()
+         ORDER BY validade DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [id, token],
+      );
 
-          resolve(results)
-        })
-      })
+      if (!tokens.length) {
+        await connection.rollback();
+        return callback("Token inválido ou expirado", null);
+      }
 
-      const queryTemp = `UPDATE senha_temp SET validade = NOW() WHERE token = ? `
-      await new Promise((resolve, reject) => {
-        pool.query(queryTemp, [token], (err, results) => {
-          if (err) {
-            reject(err);
-          }
+      const senhaHash = await hashPassword(novaSenha);
 
-          resolve(results)
-        })
-      })
+      await connection.query('UPDATE usuario SET senha = ? WHERE id = ?', [senhaHash, id]);
+      await connection.query(
+        `UPDATE senha_temp SET validade = NOW() WHERE id_usuario = ? AND token = ? AND tipo = 'senha'`,
+        [id, token],
+      );
+
+      await connection.commit();
 
       return callback(null, "OK")
     } catch (error) {
+      await connection.rollback();
       return callback(error, null)
+    } finally {
+      connection.release();
     }
   }
 
-  static editUser = (nome, email, fone, id, foto, senha, sexo, callback) => {
+  static editUser = async (nome, email, fone, id, foto, senha, sexo, callback) => {
     const google = (senha && sexo) ? true : false
-    const senhaHash = google && crypto.createHash('sha256').update(senha).digest('hex');
+    const senhaHash = google && await hashPassword(senha);
 
     let caminhoFoto = null;
 
@@ -489,20 +539,38 @@ class AuthModel {
         return callback(`Formato de imagem inválido`, null)
       }
 
-      const ext = matches[1];
+      const ext = matches[1].toLowerCase();
       const buffer = Buffer.from(matches[2], "base64");
+
+      if (!ALLOWED_PROFILE_IMAGE_EXTENSIONS.has(ext)) {
+        return callback(`Formato de imagem não permitido`, null)
+      }
+
+      if (buffer.length > MAX_PROFILE_IMAGE_BYTES) {
+        return callback(`Imagem maior que o limite permitido`, null)
+      }
+
+      if (!hasExpectedImageSignature(buffer, ext)) {
+        return callback(`Conteúdo da imagem inválido`, null)
+      }
+
       const nomeArquivo = `perfil_${id}_${Date.now()}.${ext}`;
-      const caminho = path.join(__dirname, "../..", "uploads/perfis", nomeArquivo);
+      const uploadDir = path.join(__dirname, "../..", "uploads/perfis");
+      fs.mkdirSync(uploadDir, { recursive: true });
+      const caminho = path.join(uploadDir, nomeArquivo);
 
       fs.writeFileSync(caminho, buffer);
-      caminhoFoto = `/uploads/perfis/${nomeArquivo}`;
+      caminhoFoto = `uploads/perfis/${nomeArquivo}`;
     }
 
-    const query = `UPDATE usuario SET nome = ?, fone = ?, perfil_url = ?, incompleto = NULL${google ? `, senha = ?, sexo = ?` : ` `}WHERE id = ?`
+    const fotoClause = caminhoFoto ? `, perfil_url = ?` : ``
+    const query = `UPDATE usuario SET nome = ?, fone = ?${fotoClause}${google ? `, senha = ?, sexo = ?` : ` `}WHERE id = ?`
 
-    let params
+    let params = [nome, fone]
 
-    if (google) params = [nome, fone, String(caminhoFoto), senhaHash, sexo, id] ?? [nome, fone, String(caminhoFoto), id]
+    if (caminhoFoto) params.push(String(caminhoFoto))
+    if (google) params.push(senhaHash, sexo)
+    params.push(id)
 
     pool.query(query, params, (err, results) => {
       if (err) {
@@ -570,7 +638,8 @@ class AuthModel {
         return callback("Foto não encontrada", null);
       }
 
-      const caminho = path.join(__dirname, "../..", results[0].perfil_url);
+      const perfilUrl = String(results[0].perfil_url).replace(/^[/\\]+/, '');
+      const caminho = path.join(__dirname, "../..", perfilUrl);
       return callback(null, caminho);
     });
   };

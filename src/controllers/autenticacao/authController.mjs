@@ -104,6 +104,11 @@ const mudaSenha = (req, res) => {
 
   AuthModel.mudaSenha(id, novaSenha, token, (err, results) => {
     if (err) {
+      if (err === 'Token inválido ou expirado') {
+        return res.status(400).json({ error: err });
+      }
+
+      console.error('Erro ao mudar a senha:', err);
       return res.status(500).json({ error: 'Erro ao mudar a senha' });
     }
 

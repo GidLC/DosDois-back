@@ -2,15 +2,19 @@ import nodemailer from 'nodemailer'
 import enviaEmail from '../../data/enviaEmail/enviaEmail.mjs'
 import EmailCadastro from '../../data/emails/Cadastro/EmailCadastro.mjs'
 
-const adminMail = "dionisio_roberval@hotmail.com"
-const adminPass = "Didi@@123"
-const mailHost = "smtp-mail.outlook.com"
-const mailPort = 587
+const adminMail = process.env.SMTP_USER
+const adminPass = process.env.SMTP_PASS
+const mailHost = process.env.SMTP_HOST ?? "smtp-mail.outlook.com"
+const mailPort = Number(process.env.SMTP_PORT ?? 587)
 
 class enviaEmailModel {
     static enviaEmail = async (destinatario, assunto, conteudo, callback) => {
         await enviaEmail(destinatario, "E-mail teste", EmailCadastro("Gideone", "df56ed"))
         try {
+            if (!adminMail || !adminPass) {
+                return callback('SMTP não configurado', null)
+            }
+
             const transpoter = nodemailer.createTransport({
                 host: mailHost,
                 port: mailPort,
@@ -27,6 +31,8 @@ class enviaEmailModel {
                 subject: assunto,
                 html: conteudo
             }
+
+            await transpoter.sendMail(options)
     
             return callback(null, 'OK')
         } catch (error) {

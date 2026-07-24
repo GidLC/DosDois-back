@@ -2,7 +2,7 @@ import { queryAsync } from "../data/queryAsync/queryAsync.mjs";
 
 //Carrega dados da assinatura do usuário
 export const loadPlan = async (req, res, next) => {
-    const auth = req.headers.auth;
+    const auth = req.authContext?.cod_casal || req.headers.auth;
 
     const [assinatura] = await queryAsync(`
     SELECT p.*, a.fim
@@ -33,7 +33,7 @@ export const loadPlanFunction = async (auth) => {
 //Verifica os limites de cadastro do usuário
 export const checkModuleLimit = (moduleCode, permitir = null) => {
     return async (req, res, next) => {
-        const auth = req.headers.auth;
+        const auth = req.authContext?.cod_casal || req.headers.auth;
 
         //Busca dados do módulo a ser verificado
         const [module] = await queryAsync(
