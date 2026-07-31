@@ -13,6 +13,12 @@ const createCheckout = async (req, res) => {
             return res.status(400).json({ error: 'CHECKOUT_INVALIDO' })
         }
 
+        const assinaturaAtual = await AssinaturaModel.getAssinaturaCorrente(auth.cod_casal)
+
+        if (assinaturaAtual) {
+            return res.status(409).json({ error: 'ASSINATURA_JA_EXISTE' })
+        }
+
         const oferta = await AssinaturaModel.getOfertaAtiva(codigoOferta)
 
         if (!oferta) {
@@ -58,7 +64,10 @@ const createAssinatura = (req, res) => {
     AssinaturaModel.createAssinatura(checkout.offerId, checkout.cod_casal, email, token, (err, results) => {
         if (err) {
             console.error('Erro ao registrar assinatura', err);
-            return res.status(500).json({ error: 'Erro ao registrar assinatura' });
+            return res.status(err.status || 500).json({
+                error: err.code || 'Erro ao registrar assinatura',
+                message: err.message,
+            });
         }
 
         res.status(200).json({ message: 'Assinatura registrada com sucesso', results, init_point: results.init_point });

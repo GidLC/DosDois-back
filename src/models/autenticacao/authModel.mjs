@@ -20,6 +20,7 @@ import { hashPassword, verifyPassword } from "../../data/security/passwordHash.m
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MAX_PROFILE_IMAGE_BYTES = Number(process.env.MAX_PROFILE_IMAGE_BYTES ?? 2 * 1024 * 1024);
 const ALLOWED_PROFILE_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
+const APP_URL = 'https://dosdoisapp.com.br';
 
 const hasExpectedImageSignature = (buffer, ext) => {
   if (['jpg', 'jpeg'].includes(ext)) {
@@ -36,6 +37,25 @@ const hasExpectedImageSignature = (buffer, ext) => {
   }
 
   return false;
+};
+
+const getActiveInviteLink = async (codCasal) => {
+  if (!codCasal) return null;
+
+  const [vinculo] = await new Promise((resolve, reject) => {
+    pool.query(
+      'SELECT uuid FROM vinculos WHERE casal = ? AND ativo = 1 LIMIT 1',
+      [codCasal],
+      (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      }
+    );
+  });
+
+  return vinculo?.uuid
+    ? `${APP_URL}/atribuicao/${codCasal}/${vinculo.uuid}`
+    : null;
 };
 
 const getUserData = async (usuario, remember) => {
@@ -65,6 +85,10 @@ const getUserData = async (usuario, remember) => {
     whatsPend = true;
   }
 
+  const linkVinculo = casal?.usuario_sec === null
+    ? await getActiveInviteLink(casal.cod_casal)
+    : null;
+
   // Caso o usuário ainda não tenha casal
   if (!casal || casal.usuario_sec === null) {
     const userData = {
@@ -76,8 +100,10 @@ const getUserData = async (usuario, remember) => {
       incompleto: usuario.incompleto,
       cod_casal: casal?.cod_casal || null,
       casal_formado: 0,
+      link_vinculo: linkVinculo,
       plano,
       whatsPend,
+      whats_verificado: usuario.whats_verificado,
     };
 
     const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
@@ -108,6 +134,7 @@ const getUserData = async (usuario, remember) => {
     casal_formado: 1,
     plano,
     whatsPend,
+    whats_verificado: usuario.whats_verificado,
   };
 
   const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
@@ -171,12 +198,12 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Lazer", 0, 7, 28, ?);
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Roupas e Acessórios", 0, 8, 33, ?);
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Água/Luz/Internet", 0, 9, 39, ?);
-  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Despesas Diversas", 0, 10, 36, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, padrao) VALUES("Despesas Diversas", 0, 10, 36, ?, 1);
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, cat_sistema) VALUES("*Ajuste*",0, 2, 36, ?, 1);
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Salário", 1, 11, 38, ?);
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Rendimentos", 1, 12, 37, ?);
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Presentes", 1, 13, 26, ?);
-  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal) VALUES("Receitas Diversas", 1, 14, 31, ?);
+  INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, padrao) VALUES("Receitas Diversas", 1, 14, 31, ?, 1);
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, cat_sistema) VALUES("*Ajuste*",1, 3, 37, ?, 1);
   `;
 
@@ -207,7 +234,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
 
   // Cria vínculo e envia notificações
   const uuid = crypto.randomUUID();
-  const url = `https://dosdoisapp.com.br/atribuicao/${codigoCasal}/${uuid}`;
+  const url = `${APP_URL}/atribuicao/${codigoCasal}/${uuid}`;
 
   await new Promise((resolve, reject) => {
     pool.query(
@@ -463,10 +490,10 @@ class AuthModel {
         return callback("Token expirado", null)
       }
 
-      const queryUser = `UPDATE usuario SET whats_verificado = 1 WHERE id = ${temp[0].id_usuario}`
+      const idUsuario = temp[0].id_usuario
 
-      const user = await new Promise((resolve, reject) => {
-        pool.query(queryUser, (err, results) => {
+      await new Promise((resolve, reject) => {
+        pool.query('UPDATE usuario SET whats_verificado = 1 WHERE id = ?', [idUsuario], (err, results) => {
           if (err) {
             reject(err);
           } else {
@@ -475,11 +502,28 @@ class AuthModel {
         });
       });
 
-      console.log(user)
+      await new Promise((resolve, reject) => {
+        pool.query('UPDATE senha_temp SET validade = NOW() WHERE id_usuario = ? AND token = ? AND tipo = ?', [idUsuario, token, tipo], (err, results) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(results);
+          }
+        });
+      });
 
-      if (user) {
-        return callback(null, user)
-      }
+      const [usuarioAtualizado] = await new Promise((resolve, reject) => {
+        pool.query('SELECT * FROM usuario WHERE id = ?', [idUsuario], (err, results) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(results);
+          }
+        });
+      });
+
+      const result = await getUserData(usuarioAtualizado, null)
+      return callback(null, result)
     }
   };
 
