@@ -11,10 +11,17 @@ const enviaWhats = async (num, msg) => {
                 msg
             },
         });
-    
-        return response.json();
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data?.details || data?.error || `WhatsApp API respondeu com status ${response.status}`);
+        }
+
+        return data;
     } catch (error) {
         console.error(`Houve um erro no envio da mensagem de Whatsapp. ${error}`)
+        throw error;
     }
 };
 

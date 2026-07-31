@@ -1,8 +1,63 @@
 import { formataDataBr } from "../../../data/formataDataBR/formataDataBR.mjs";
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
+import { pool } from "../../../config/config.mjs";
 import separaData from "../../../data/SeparaData/SeparaData.mjs";
 import { MP_ACCESS_TOKEN } from "../mpToken.mjs";
 import { MP_PLANS } from "../utils/MP_PLANS.mjs";
+
+const ASSINATURA_DUPLICADA = {
+    code: "ASSINATURA_JA_EXISTE",
+    status: 409,
+    message: "Este casal ja possui uma assinatura ativa ou em processamento.",
+};
+
+const connectionQuery = (connection, sql, params = []) =>
+    new Promise((resolve, reject) => {
+        connection.query(sql, params, (err, results) => {
+            if (err) return reject(err);
+            resolve(results);
+        });
+    });
+
+const getConnection = () =>
+    new Promise((resolve, reject) => {
+        pool.getConnection((err, connection) => {
+            if (err) return reject(err);
+            resolve(connection);
+        });
+    });
+
+const beginTransaction = (connection) =>
+    new Promise((resolve, reject) => {
+        connection.beginTransaction((err) => {
+            if (err) return reject(err);
+            resolve();
+        });
+    });
+
+const commit = (connection) =>
+    new Promise((resolve, reject) => {
+        connection.commit((err) => {
+            if (err) return reject(err);
+            resolve();
+        });
+    });
+
+const rollback = (connection) =>
+    new Promise((resolve) => {
+        connection.rollback(() => resolve());
+    });
+
+const isAssinaturaCorrente = (assinatura) => {
+    if (!assinatura) return false;
+    if (["ativa", "pendente"].includes(assinatura.status)) return true;
+    if (assinatura.status !== "criando") return false;
+
+    const updatedAt = assinatura.updated_at ? new Date(assinatura.updated_at).getTime() : 0;
+    const reservaExpiraEm = 20 * 60 * 1000;
+
+    return updatedAt && Date.now() - updatedAt < reservaExpiraEm;
+};
 
 class AssinaturaModel {
     static getOfertaAtiva = async (codigo) => {
@@ -18,6 +73,108 @@ class AssinaturaModel {
         `, [codigo])
 
         return oferta
+    }
+
+    static getAssinaturaCorrente = async (casal) => {
+        const [assinatura] = await queryAsync(`
+            SELECT *
+            FROM assinaturas
+            WHERE casal = ?
+              AND (
+                status IN ('ativa', 'pendente')
+                OR (status = 'criando' AND updated_at >= DATE_SUB(NOW(), INTERVAL 20 MINUTE))
+              )
+            LIMIT 1
+        `, [casal])
+
+        return assinatura
+    }
+
+    static reservaAssinatura = async (casal, planId) => {
+        const connection = await getConnection();
+
+        try {
+            await beginTransaction(connection);
+
+            const [lock] = await connectionQuery(
+                connection,
+                "SELECT GET_LOCK(?, 10) AS locked",
+                [`assinatura:${casal}`],
+            );
+
+            if (!lock?.locked) {
+                throw {
+                    code: "ASSINATURA_EM_PROCESSAMENTO",
+                    status: 409,
+                    message: "Ja existe uma tentativa de assinatura em processamento.",
+                };
+            }
+
+            const [assinatura] = await connectionQuery(
+                connection,
+                `
+                    SELECT *
+                    FROM assinaturas
+                    WHERE casal = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                    FOR UPDATE
+                `,
+                [casal],
+            );
+
+            if (isAssinaturaCorrente(assinatura)) {
+                throw ASSINATURA_DUPLICADA;
+            }
+
+            if (assinatura) {
+                await connectionQuery(
+                    connection,
+                    `
+                        UPDATE assinaturas
+                        SET plano_id = ?,
+                            status = 'criando',
+                            mp_status = NULL,
+                            mp_preapproval_id = NULL,
+                            updated_at = NOW()
+                        WHERE id = ?
+                    `,
+                    [planId, assinatura.id],
+                );
+            } else {
+                await connectionQuery(
+                    connection,
+                    `
+                        INSERT INTO assinaturas
+                            (casal, plano_id, status, mp_status, mp_preapproval_id, created_at, updated_at)
+                        VALUES (?, ?, 'criando', NULL, NULL, NOW(), NOW())
+                    `,
+                    [casal, planId],
+                );
+            }
+
+            await commit(connection);
+        } catch (error) {
+            await rollback(connection);
+            throw error;
+        } finally {
+            try {
+                await connectionQuery(connection, "SELECT RELEASE_LOCK(?)", [`assinatura:${casal}`]);
+            } finally {
+                connection.release();
+            }
+        }
+    }
+
+    static marcaFalhaCriacao = async (casal) => {
+        await queryAsync(`
+            UPDATE assinaturas
+            SET status = 'erro',
+                mp_status = 'erro',
+                updated_at = NOW()
+            WHERE casal = ?
+              AND status = 'criando'
+        `, [casal])
     }
 
     static createAssinatura = async (planKey, casal, email, token, callback) => {
@@ -40,6 +197,8 @@ class AssinaturaModel {
                 return callback("INVALID_PLAN", null);
             }
 
+            await this.reservaAssinatura(casal, plan.id);
+
             const response = await fetch("https://api.mercadopago.com/preapproval", {
                 method: "POST",
                 headers: {
@@ -59,10 +218,11 @@ class AssinaturaModel {
 
             if (!response.ok) {
                 console.error("Erro Mercado Pago:", data);
+                await this.marcaFalhaCriacao(casal);
                 return callback(data, null);
             }
 
-            const update = await queryAsync(`
+            await queryAsync(`
                 UPDATE assinaturas
                 SET plano_id = ?,
                     status = ?,
@@ -72,14 +232,6 @@ class AssinaturaModel {
                     updated_at = ?
                 WHERE casal = ?`,
                 [plan.id, "pendente", data.status, data.id, data.date_created, data.last_modified, casal])
-
-            if (!update.affectedRows) {
-                await queryAsync(`
-                    INSERT INTO assinaturas
-                        (casal, plano_id, status, mp_status, mp_preapproval_id, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [casal, plan.id, "pendente", data.status, data.id, data.date_created, data.last_modified])
-            }
 
             return callback(null, data);
         } catch (error) {
