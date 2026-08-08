@@ -16,6 +16,7 @@ authRouter.get('/validaVinculo', authController.validaVinculo)
 authRouter.get('/getPerfil', autenticarJWT, authController.getPerfil)
 authRouter.get('/verificaWhats', loadPlan, authController.verificaWhats)
 authRouter.get('/atualizaUser', autenticarJWT, authController.atualizaUsuario)
+authRouter.put('/onboarding/concluir', autenticarJWT, authController.concluiOnboarding)
 authRouter.post('/loginGoogle', loadPlan, authController.loginGoogle)
 
 export default authRouter;

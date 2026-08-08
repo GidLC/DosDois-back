@@ -11,6 +11,18 @@ const ASSINATURA_DUPLICADA = {
     message: "Este casal ja possui uma assinatura ativa ou em processamento.",
 };
 
+const statusMpToDb = (status) => {
+    const statusMap = {
+        authorized: "ativa",
+        paused: "pausada",
+        canceled: "cancelada",
+        cancelled: "cancelada",
+        pending: "pendente",
+    };
+
+    return statusMap[status] || status;
+};
+
 const connectionQuery = (connection, sql, params = []) =>
     new Promise((resolve, reject) => {
         connection.query(sql, params, (err, results) => {
@@ -84,6 +96,19 @@ class AssinaturaModel {
                 status IN ('ativa', 'pendente')
                 OR (status = 'criando' AND updated_at >= DATE_SUB(NOW(), INTERVAL 20 MINUTE))
               )
+            LIMIT 1
+        `, [casal])
+
+        return assinatura
+    }
+
+    static getAssinaturaAtiva = async (casal) => {
+        const [assinatura] = await queryAsync(`
+            SELECT *
+            FROM assinaturas
+            WHERE casal = ?
+              AND status = 'ativa'
+            ORDER BY id DESC
             LIMIT 1
         `, [casal])
 
@@ -251,11 +276,10 @@ class AssinaturaModel {
     };
 
     static atualizarStatusAssinatura = async (mpId, status, assinatura) => {
-        let statusDB
-        const dataAssinatura = formataDataBr(assinatura.date_created)
+        const statusDB = statusMpToDb(status)
 
         if (status == "authorized") {
-            statusDB = "ativa"
+            const dataAssinatura = formataDataBr(assinatura.date_created)
             let fimAssinatura = new Date(dataAssinatura)
 
             if (assinatura.auto_recurring.frequency_type == "months") {
@@ -275,25 +299,70 @@ class AssinaturaModel {
                 ])
         }
 
-        if (status == "paused") {
-            statusDB = "pausada"
-        }
-
-        if (status == "cancelled") {
-            statusDB = "cancelada"
-        }
-
-        if (status == "pending") {
-            statusDB = "pendente"
-        }
-
         await queryAsync(`
     UPDATE assinaturas
-    SET status = ?, updated_at = NOW()
+    SET status = ?, mp_status = ?, updated_at = NOW()
     WHERE mp_preapproval_id = ?
-    `, [statusDB, mpId]
+    `, [statusDB, status, mpId]
         )
     };
+
+    static cancelarAssinatura = async (casal) => {
+        if (!MP_ACCESS_TOKEN) {
+            throw {
+                code: "MP_ACCESS_TOKEN_NOT_CONFIGURED",
+                status: 503,
+                message: "Mercado Pago nao configurado.",
+            };
+        }
+
+        const assinatura = await this.getAssinaturaAtiva(casal);
+
+        if (!assinatura) {
+            throw {
+                code: "ASSINATURA_ATIVA_NAO_ENCONTRADA",
+                status: 404,
+                message: "Nenhuma assinatura ativa encontrada.",
+            };
+        }
+
+        if (!assinatura.mp_preapproval_id) {
+            throw {
+                code: "ASSINATURA_SEM_MERCADO_PAGO",
+                status: 409,
+                message: "Esta assinatura nao possui identificador do Mercado Pago.",
+            };
+        }
+
+        const response = await fetch(`https://api.mercadopago.com/preapproval/${assinatura.mp_preapproval_id}`, {
+            method: "PUT",
+            headers: {
+                "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ status: "canceled" })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error("Erro ao cancelar assinatura no Mercado Pago:", data);
+            throw {
+                code: "MERCADO_PAGO_CANCEL_ERROR",
+                status: response.status || 502,
+                message: "Nao foi possivel cancelar a assinatura no Mercado Pago.",
+            };
+        }
+
+        const nextStatus = data.status || "canceled";
+        await this.atualizarStatusAssinatura(assinatura.mp_preapproval_id, nextStatus, data);
+
+        return {
+            id: assinatura.id,
+            status: statusMpToDb(nextStatus),
+            mp_status: nextStatus,
+        };
+    }
 
     static getOfertas = async (callback) => {
         try {

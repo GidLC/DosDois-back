@@ -139,6 +139,39 @@ class ReceitaModel {
         }
     }
 
+    static readReceitasCasal = async (casal, mes, ano, fixa, callback) => {
+        try {
+            const tabela = (fixa == 0 || !fixa) ? 'receita' : 'receitas_fixas';
+            const camposFixos = (fixa == 1) ? ', rec.id_fixo, rec.data_criacao' : '';
+            const query = `
+                SELECT rec.id, rec.descricao, rec.valor, rec.dia, rec.mes, rec.ano, rec.status, rec.obs, rec.usuario, rec.tipo,
+                       cat.nome AS nome_categoria, ic.ion_nome AS nome_icone,
+                       cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria,
+                       tags.id AS id_tag, tags.nome AS nome_tag${camposFixos}
+                FROM ${tabela} AS rec
+                INNER JOIN categoria_tr AS cat ON cat.id = rec.categoria
+                INNER JOIN icones AS ic ON ic.id = cat.icone
+                INNER JOIN cor ON cor.id = cat.cor
+                INNER JOIN banco AS ba ON ba.id = rec.banco
+                LEFT JOIN tags ON tags.id = rec.tag
+                WHERE rec.casal = ? AND rec.mes = ? AND rec.ano = ?`;
+
+            const receitas = await new Promise((resolve, reject) => {
+                pool.query(query, [casal, mes, ano], (err, results) => {
+                    if (err) {
+                        reject(err)
+                    }
+                    resolve(results)
+                })
+            })
+
+            return callback(null, receitas)
+        } catch (error) {
+            console.error('Erro ao executar consulta de receitas do casal:', error);
+            return callback(error, null);
+        }
+    }
+
     static readReceitaID = async (id, usuario, casal, fixa, callback) => {
         try {
             const tabela = (fixa == 0 || !fixa) ? 'receita' : 'receitas_fixas';

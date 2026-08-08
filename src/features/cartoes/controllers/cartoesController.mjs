@@ -49,9 +49,9 @@ const pagarFatura = (req, res) => {
 }
 
 const editCartao = (req, res) => {
-    const { id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp } = req.body
+    const { id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, padrao } = req.body
 
-    CartoesModel.editCartao(id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, (err, results) => {
+    CartoesModel.editCartao(id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, padrao, (err, results) => {
         if (err) {
             console.error('Não foi possível editar o cartão', err);
             return res.status(500).json({ error: `Não foi possível editar o cartão. ${err}` });

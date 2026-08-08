@@ -1,5 +1,12 @@
 import { pool } from "../../config/config.mjs";
 
+const ignoraPagamentosFatura = `
+    AND NOT (
+        LOWER(descricao) LIKE 'adiantamento de fatura%'
+        OR LOWER(descricao) LIKE 'pagamento da fatura%'
+    )
+`;
+
 class graficosModel {
     static receitaPorCategoria = async (casal, usuario, mes, ano, callback) => {
         const queryCategoria = `SELECT cat.id, cat.nome, cat.cat_sistema, c.codigo AS cod_cor, ic.ion_nome AS icone FROM categoria_tr AS cat 
@@ -57,9 +64,10 @@ class graficosModel {
             const calculaSaldo = async (fixa, cadParceiro) => {
                 const table = (fixa == 1) ? "despesas_fixas" : "despesa"
                 const idUsuario = (cadParceiro == 1) ? parceiro : usuario
+                const filtroPagamentoFatura = table === "despesa" ? ignoraPagamentosFatura : ""
 
                 const saldoPorCategoriaBD = await new Promise((resolve, reject) => {
-                    const querySaldoPorCategoria = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE categoria = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? AND tipo = ?`
+                    const querySaldoPorCategoria = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE categoria = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? AND tipo = ? ${filtroPagamentoFatura}`
                     pool.query(querySaldoPorCategoria, [categoria.id, casal, idUsuario, mes, ano, tipo], (err, results) => {
                         if (err) {
                             reject(err);
@@ -76,7 +84,7 @@ class graficosModel {
                 const saldoPCatUserFixa = await calculaSaldo(1, 0)
 
                 return { ...categoria, saldoPorCategoria: saldoPCatUserNormal + saldoPCatUserFixa }
-            } else if (tipo = 1) {
+            } else if (tipo == 1) {
                 const saldoPCatUserNormal = await calculaSaldo(0, 0)
                 const saldoPCatUserFixa = await calculaSaldo(1, 0)
                 const saldoPCatParcNormal = await calculaSaldo(0, 1)
@@ -113,9 +121,10 @@ class graficosModel {
                 const calculaSaldo = async (fixa, cadParceiro) => {
                     const table = (fixa == 1) ? "despesas_fixas" : "despesa"
                     const idUsuario = (cadParceiro == 1) ? parceiro : usuario
+                    const filtroPagamentoFatura = table === "despesa" ? ignoraPagamentosFatura : ""
 
                     const saldoPorTagBD = await new Promise((resolve, reject) => {
-                        const querySaldoPorTag = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE tag = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ?`
+                        const querySaldoPorTag = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE tag = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? ${filtroPagamentoFatura}`
                         pool.query(querySaldoPorTag, [tag.id, casal, idUsuario, mes, ano], (err, results) => {
                             if (err) {
                                 reject(err);
