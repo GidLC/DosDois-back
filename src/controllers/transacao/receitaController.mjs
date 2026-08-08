@@ -31,6 +31,22 @@ const readReceita = (req, res) => {
   })
 }
 
+const readReceitasCasal = (req, res) => {
+  const casal = req.header('auth');
+  const mes = req.header('mes');
+  const ano = req.header('ano');
+  const fixa = req.header('fixa')
+
+  ReceitaModel.readReceitasCasal(casal, mes, ano, fixa, (err, results) => {
+    if (err) {
+      console.error('Erro ao encontrar as receitas do casal', err);
+      return res.status(500).json({ error: `Erro ao buscar receitas do casal. ${err}` });
+    }
+
+    res.status(200).json({ message: 'Receitas do casal encontradas', results })
+  })
+}
+
 const readReceitaID = (req, res) => {
   const id = req.header('id');
   const casal = req.header('auth');
@@ -109,4 +125,4 @@ const efetivaReceita = (req, res) => {
 }
 
 
-export default { addReceita, readReceita, deleteReceita, readReceitaID, editReceita, efetivaReceita, editReceitaFixa }
+export default { addReceita, readReceita, readReceitasCasal, deleteReceita, readReceitaID, editReceita, efetivaReceita, editReceitaFixa }

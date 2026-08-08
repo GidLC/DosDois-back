@@ -38,6 +38,7 @@ const readDespesa = (req, res) => {
             valorMax,
             descricao,
             groupBy,
+            incluirAbatimentos,
         } = req.query;
 
         // Monta filtros básicos
@@ -59,7 +60,8 @@ const readDespesa = (req, res) => {
             valorMin: valorMin ? parseFloat(valorMin) : null,
             valorMax: valorMax ? parseFloat(valorMax) : null,
             descricao: descricao || null,
-            groupBy: groupBy || null
+            groupBy: groupBy || null,
+            incluirAbatimentos: incluirAbatimentos === '1' || incluirAbatimentos === 'true'
         };
 
         // Se veio fixa, faz só uma busca

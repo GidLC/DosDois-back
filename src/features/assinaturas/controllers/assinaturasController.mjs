@@ -150,4 +150,27 @@ const getOfertas = async (req, res) => {
     })
 }
 
-export default { createCheckout, createAssinatura, mpWebHook, getOfertas }
+const cancelarAssinatura = async (req, res) => {
+    try {
+        const auth = req.authContext
+
+        if (!auth?.cod_casal) {
+            return res.status(400).json({ error: 'ASSINATURA_INVALIDA' })
+        }
+
+        const results = await AssinaturaModel.cancelarAssinatura(auth.cod_casal)
+
+        return res.status(200).json({
+            message: 'Assinatura cancelada com sucesso',
+            results,
+        })
+    } catch (error) {
+        console.error('Erro ao cancelar assinatura', error)
+        return res.status(error.status || 500).json({
+            error: error.code || 'ERRO_CANCELAR_ASSINATURA',
+            message: error.message || 'Nao foi possivel cancelar a assinatura.',
+        })
+    }
+}
+
+export default { createCheckout, createAssinatura, mpWebHook, getOfertas, cancelarAssinatura }

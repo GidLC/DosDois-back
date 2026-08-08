@@ -15,7 +15,8 @@ export const despesasQueryBuilder = ({
     status,
     valorMin,
     valorMax,
-    descricao
+    descricao,
+    incluirAbatimentos
 }) => {
 
     const tabela = (fixa == 0 || !fixa) ? 'despesa' : 'despesas_fixas';
@@ -84,6 +85,14 @@ export const despesasQueryBuilder = ({
     if (valorMin) { query += ` AND des.valor >= ?`; params.push(valorMin); }
     if (valorMax) { query += ` AND des.valor <= ?`; params.push(valorMax); }
     if (descricao) { query += ` AND des.descricao LIKE ?`; params.push(`%${descricao}%`); }
+    if (!incluirAbatimentos && tabela === 'despesa') {
+        query += `
+            AND NOT (
+                LOWER(des.descricao) LIKE 'adiantamento de fatura%'
+                OR LOWER(des.descricao) LIKE 'pagamento da fatura%'
+            )
+        `;
+    }
 
     query += ` ORDER BY des.ano, des.mes, des.dia`;
 

@@ -191,6 +191,22 @@ const atualizaUsuario = (req, res) => {
   })
 }
 
+const concluiOnboarding = (req, res) => {
+  const idUser = req.authContext?.id
+
+  if (!idUser) {
+    return res.status(400).json({ error: "ID do usuário não encontrado no token." });
+  }
+
+  AuthModel.concluiOnboarding(idUser, (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: `Não foi possível concluir os primeiros passos.`, err })
+    }
+
+    return res.status(200).json({ message: 'Primeiros passos concluídos com sucesso', results })
+  })
+}
+
 const loginGoogle = async (req, res) => {
   try {
     const { tokenGoogle } = req.body;
@@ -222,6 +238,6 @@ const loginGoogle = async (req, res) => {
 
 export default {
   cadastroUsuario, loginUsuario, vincCadastro, gerarToken, validaToken,
-  mudaSenha, editUser, validaVinculo, getPerfil, verificaWhats, atualizaUsuario, loginGoogle
+  mudaSenha, editUser, validaVinculo, getPerfil, verificaWhats, atualizaUsuario, concluiOnboarding, loginGoogle
 }
 

@@ -104,6 +104,7 @@ const getUserData = async (usuario, remember) => {
       plano,
       whatsPend,
       whats_verificado: usuario.whats_verificado,
+      onboarding_concluido: usuario.onboarding_concluido,
     };
 
     const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
@@ -135,6 +136,7 @@ const getUserData = async (usuario, remember) => {
     plano,
     whatsPend,
     whats_verificado: usuario.whats_verificado,
+    onboarding_concluido: usuario.onboarding_concluido,
   };
 
   const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
@@ -727,6 +729,32 @@ class AuthModel {
 
     } catch (error) {
       console.error(`Erro ao atualizar usuário: ${error}`);
+      return callback(error, null);
+    }
+  }
+
+  static async concluiOnboarding(idUser, callback) {
+    try {
+      await new Promise((resolve, reject) => {
+        pool.query('UPDATE usuario SET onboarding_concluido = 1 WHERE id = ?', [idUser], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
+        });
+      });
+
+      const [usuario] = await new Promise((resolve, reject) => {
+        pool.query('SELECT * FROM usuario WHERE id = ?', [idUser], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
+        });
+      });
+
+      if (!usuario) return callback('Usuário não encontrado', null);
+
+      const result = await getUserData(usuario, null);
+      return callback(null, result);
+    } catch (error) {
+      console.error(`Erro ao concluir onboarding: ${error}`);
       return callback(error, null);
     }
   }

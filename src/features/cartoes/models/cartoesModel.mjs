@@ -12,11 +12,19 @@ const dataBR = await separaData(data)
 class CartoesModel {
     static addCartao = async (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, padrao, callback) => {
         try {
+            const padraoNormalizado = Number(padrao) === 1 ? 1 : 0
 
-            const queryCartao = 'INSERT INTO cartoes (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
+            if (padraoNormalizado) {
+                await queryAsync(
+                    'UPDATE cartoes SET padrao = 0 WHERE usuario = ? AND arquivo = 0',
+                    [usuario]
+                )
+            }
+
+            const queryCartao = 'INSERT INTO cartoes (nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, padrao) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
 
             const cartao = await new Promise((resolve, reject) => {
-                pool.query(queryCartao, [nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, padrao], (err, results) => {
+                pool.query(queryCartao, [nome, usuario, bandeira, limite, fech, venc, cor, disp, banco, casal, padraoNormalizado], (err, results) => {
                     if (err) {
                         reject(err)
                     }
@@ -72,7 +80,7 @@ class CartoesModel {
              * 1. Buscar cartões do usuário
              * --------------------------------------------------*/
             const queryCartoes = `
-            SELECT car.id_cartao AS id, car.nome, car.fech, car.venc, car.limite, car.banco, car.disp, car.bandeira as idBandeira, car.arquivo,
+            SELECT car.id_cartao AS id, car.nome, car.usuario, car.fech, car.venc, car.limite, car.banco, car.disp, car.bandeira as idBandeira, car.arquivo, car.padrao,
                    cor.codigo AS codCor, cor.id AS idCor, band.nome AS nomeBandeira
             FROM cartoes AS car
             INNER JOIN cor ON car.cor = cor.id
@@ -138,6 +146,7 @@ class CartoesModel {
                     return {
                         id: cartao.id,
                         nome: cartao.nome,
+                        usuario: cartao.usuario,
                         bandeira: cartao.nomeBandeira,
                         idBandeira: cartao.idBandeira,
                         limite: Number(cartao.limite),
@@ -149,6 +158,7 @@ class CartoesModel {
                         banco: cartao.banco,
                         disp: cartao.disp,
                         arquivo: cartao.arquivo,
+                        padrao: cartao.padrao,
                         faturaAtual: faturaAtual?.total || 0,
                         faturaFechada: faturaFechada?.total || 0,
                         idFaturaAtual: faturaAtual?.id || null,
@@ -237,7 +247,7 @@ class CartoesModel {
         }
     }
 
-    static editCartao = async (id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, callback) => {
+    static editCartao = async (id, nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, padrao, callback) => {
         try {
             //O valor do limite não pode ser menor que o valor das faturas abertas
 
@@ -248,8 +258,26 @@ class CartoesModel {
                 return callback(`O novo limite não pode ser menor que as despesas no cartão`, null)
             }
             
-            const queryEdit = `UPDATE cartoes SET nome = ?, banco = ?, bandeira = ?, limite = ?, fech = ?, venc = ?, cor = ?, arquivo = ?, disp = ? WHERE id_cartao = ?`;
-            await queryAsync(queryEdit, [nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, id])
+            const [cartaoAtual] = await queryAsync(
+                'SELECT usuario FROM cartoes WHERE id_cartao = ?',
+                [id]
+            )
+
+            if (!cartaoAtual) {
+                return callback('Cartao nao encontrado', null)
+            }
+
+            const padraoNormalizado = Number(arquivo) === 1 ? 0 : Number(padrao) === 1 ? 1 : 0
+
+            if (padraoNormalizado) {
+                await queryAsync(
+                    'UPDATE cartoes SET padrao = 0 WHERE usuario = ? AND arquivo = 0 AND id_cartao != ?',
+                    [cartaoAtual.usuario, id]
+                )
+            }
+
+            const queryEdit = `UPDATE cartoes SET nome = ?, banco = ?, bandeira = ?, limite = ?, fech = ?, venc = ?, cor = ?, arquivo = ?, disp = ?, padrao = ? WHERE id_cartao = ?`;
+            await queryAsync(queryEdit, [nome, banco, bandeira, limite, fech, venc, cor, arquivo, disp, padraoNormalizado, id])
 
 
             return callback(null, 'EDITADA')
