@@ -171,7 +171,7 @@ const createCheckout = async (req, res) => {
 }
 
 const createAssinatura = (req, res) => {
-    const { email, token, checkoutToken } = req.body
+    const { email, token, checkoutToken, deviceSessionId } = req.body
 
     let checkout
 
@@ -213,7 +213,7 @@ const createAssinatura = (req, res) => {
         req,
     });
 
-    AssinaturaModel.createAssinatura(checkout.offerId, checkout.cod_casal, email, token, (err, results) => {
+    AssinaturaModel.createAssinatura(checkout.offerId, checkout.cod_casal, email, token, { deviceSessionId }, (err, results) => {
         if (err) {
             console.error('Erro ao registrar assinatura', err);
 
