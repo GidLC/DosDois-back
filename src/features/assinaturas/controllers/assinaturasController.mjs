@@ -254,8 +254,10 @@ const createAssinatura = (req, res) => {
             casal: checkout.cod_casal,
             usuario: checkout.userId,
             mpPreapprovalId: results?.id,
+            assinaturaId: results?.assinatura_id,
             metadata: {
                 initPoint: Boolean(results?.init_point),
+                externalReference: results?.external_reference,
             },
             req,
         });
@@ -264,7 +266,8 @@ const createAssinatura = (req, res) => {
             message: 'Assinatura registrada com sucesso',
             results,
             status: results?.status,
-            assinaturaId: results?.id,
+            assinaturaId: results?.assinatura_id,
+            mpPreapprovalId: results?.id,
             init_point: results?.init_point,
         });
     })
