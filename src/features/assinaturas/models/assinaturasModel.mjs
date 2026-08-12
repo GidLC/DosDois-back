@@ -46,6 +46,26 @@ const fetchMercadoPagoPreapproval = async (mpPreapprovalId) => {
     return data;
 };
 
+const updateMercadoPagoPreapprovalStatus = async (mpPreapprovalId, status) => {
+    const response = await fetch(`https://api.mercadopago.com/preapproval/${mpPreapprovalId}`, {
+        method: "PUT",
+        headers: {
+            "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ status })
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    return { response, data };
+};
+
+const isInvalidPreapprovalStatusParam = (data) =>
+    String(data?.message || data?.error || "")
+        .toLowerCase()
+        .includes("invalid preapproval status param");
+
 const connectionQuery = (connection, sql, params = []) =>
     new Promise((resolve, reject) => {
         connection.query(sql, params, (err, results) => {
@@ -428,16 +448,17 @@ class AssinaturaModel {
             };
         }
 
-        const response = await fetch(`https://api.mercadopago.com/preapproval/${assinatura.mp_preapproval_id}`, {
-            method: "PUT",
-            headers: {
-                "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ status: "canceled" })
-        });
+        const cancelStatuses = ["cancelled", "canceled"];
+        let response;
+        let data;
 
-        const data = await response.json();
+        for (const cancelStatus of cancelStatuses) {
+            const result = await updateMercadoPagoPreapprovalStatus(assinatura.mp_preapproval_id, cancelStatus);
+            response = result.response;
+            data = result.data;
+
+            if (response.ok || !isInvalidPreapprovalStatusParam(data)) break;
+        }
 
         if (!response.ok) {
             console.error("Erro ao cancelar assinatura no Mercado Pago:", data);
