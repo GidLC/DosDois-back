@@ -168,6 +168,13 @@ const buildMercadoPagoItems = (plan) => {
     ];
 };
 
+const safeDeviceSessionId = (deviceSessionId) => {
+    if (!deviceSessionId) return null;
+
+    const normalized = String(deviceSessionId).trim();
+    return normalized.length <= 255 ? normalized : null;
+};
+
 const connectionQuery = (connection, sql, params = []) =>
     new Promise((resolve, reject) => {
         connection.query(sql, params, (err, results) => {
@@ -399,7 +406,10 @@ class AssinaturaModel {
         `, [casal])
     }
 
-    static createAssinatura = async (planKey, casal, email, token, callback) => {
+    static createAssinatura = async (planKey, casal, email, token, optionsOrCallback, maybeCallback) => {
+        const options = typeof optionsOrCallback === "function" ? {} : optionsOrCallback || {};
+        const callback = typeof optionsOrCallback === "function" ? optionsOrCallback : maybeCallback;
+
         try {
             if (!MP_ACCESS_TOKEN) {
                 return callback("MP_ACCESS_TOKEN_NOT_CONFIGURED", null);
@@ -423,12 +433,14 @@ class AssinaturaModel {
             const assinaturaId = await this.reservaAssinatura(casal, plan.id);
             const externalReference = `assinatura:${assinaturaId}`;
             const items = buildMercadoPagoItems(plan);
+            const deviceSessionId = safeDeviceSessionId(options.deviceSessionId);
 
             const response = await fetch("https://api.mercadopago.com/preapproval", {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    ...(deviceSessionId ? { "X-meli-session-id": deviceSessionId } : {}),
                 },
                 body: JSON.stringify({
                     reason: "Assinatura DosDois",
