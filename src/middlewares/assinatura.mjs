@@ -73,6 +73,42 @@ const loadCurrentUsage = async (auth, moduleCode, moduleId) => {
     return Number(usage?.uso || 0);
 };
 
+const attachPendingSubscription = async (auth, plan) => {
+    const [assinaturaPendente] = await queryAsync(`
+    SELECT
+      a.id AS assinatura_id,
+      a.status AS assinatura_status,
+      a.mp_status,
+      a.mp_preapproval_id,
+      a.inicio,
+      a.fim,
+      p.nome AS assinatura_plano_nome,
+      p.codigo AS assinatura_plano_codigo
+    FROM assinaturas AS a
+    JOIN planos p ON p.id = a.plano_id
+    WHERE a.casal = ?
+      AND a.status = 'pendente'
+      AND LOWER(p.codigo) <> 'free'
+    ORDER BY a.id DESC
+    LIMIT 1
+  `, [auth]);
+
+    if (!assinaturaPendente) return plan;
+
+    return {
+        ...plan,
+        assinatura_pendente: true,
+        assinatura_id: assinaturaPendente.assinatura_id,
+        assinatura_status: assinaturaPendente.assinatura_status,
+        assinatura_mp_status: assinaturaPendente.mp_status,
+        assinatura_mp_preapproval_id: assinaturaPendente.mp_preapproval_id,
+        assinatura_inicio: assinaturaPendente.inicio,
+        assinatura_fim: assinaturaPendente.fim,
+        assinatura_plano_nome: assinaturaPendente.assinatura_plano_nome,
+        assinatura_plano_codigo: assinaturaPendente.assinatura_plano_codigo,
+    };
+};
+
 //Carrega dados da assinatura do usuário
 export const loadPlan = async (req, res, next) => {
     const auth = req.authContext?.cod_casal || req.headers.auth;
@@ -138,7 +174,9 @@ export const loadPlanFunction = async (auth) => {
   `, [auth]);
     }
 
-    return assinatura || await loadFreePlan();
+    const plan = assinatura || await loadFreePlan();
+
+    return await attachPendingSubscription(auth, plan);
 };
 
 //Verifica os limites de cadastro do usuário
