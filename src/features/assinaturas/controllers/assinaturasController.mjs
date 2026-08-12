@@ -1,34 +1,139 @@
 import AssinaturaModel from "../models/assinaturasModel.mjs";
+import AssinaturaEventosModel from "../models/assinaturaEventosModel.mjs";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../../../data/apiConfig.mjs";
 import { MP_ACCESS_TOKEN } from "../mpToken.mjs";
+import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
+
+const getCodCasalFromAuth = async (auth) => {
+    if (auth?.cod_casal) return auth.cod_casal;
+    if (!auth?.id) return null;
+
+    const [usuario] = await queryAsync(
+        "SELECT casal FROM usuario WHERE id = ? LIMIT 1",
+        [auth.id],
+    );
+
+    return usuario?.casal || null;
+}
+
+const trackAssinaturaEvento = (payload) => {
+    void AssinaturaEventosModel.registrar(payload);
+}
+
+const getAuthContextFromBearer = (req) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+
+    if (!token) return null;
+
+    try {
+        const usuario = jwt.verify(token, JWT_SECRET);
+
+        return {
+            id: usuario.id,
+            cod_casal: usuario.cod_casal ?? usuario.casal ?? usuario.auth ?? null,
+            id_parceiro: usuario.id_parceiro ?? null,
+        };
+    } catch {
+        return null;
+    }
+}
+
+const getCheckoutContext = (checkoutToken) => {
+    if (!checkoutToken) return null;
+
+    try {
+        const checkout = jwt.verify(checkoutToken, JWT_SECRET);
+        return checkout?.purpose === "checkout" ? checkout : null;
+    } catch {
+        return null;
+    }
+}
 
 const createCheckout = async (req, res) => {
     try {
         const { offerId, planKey } = req.body
         const codigoOferta = offerId || planKey
         const auth = req.authContext
+        const codCasal = await getCodCasalFromAuth(auth)
 
-        if (!auth?.cod_casal || !codigoOferta) {
-            return res.status(400).json({ error: 'CHECKOUT_INVALIDO' })
+        if (!codigoOferta) {
+            trackAssinaturaEvento({
+                evento: "checkout_failed",
+                source: "app",
+                status: "oferta_nao_informada",
+                usuario: auth?.id,
+                req,
+            });
+
+            return res.status(400).json({
+                error: 'CHECKOUT_INVALIDO',
+                message: 'Oferta nao informada para iniciar o checkout.',
+            })
         }
 
-        const assinaturaAtual = await AssinaturaModel.getAssinaturaCorrente(auth.cod_casal)
+        if (!codCasal) {
+            trackAssinaturaEvento({
+                evento: "checkout_failed",
+                source: "app",
+                status: "cadastro_incompleto",
+                offerId: codigoOferta,
+                usuario: auth?.id,
+                req,
+            });
+
+            return res.status(400).json({
+                error: 'CHECKOUT_SEM_CASAL',
+                message: 'Finalize seu cadastro ou entre novamente antes de assinar.',
+            })
+        }
+
+        const assinaturaAtual = await AssinaturaModel.getAssinaturaCorrente(codCasal)
 
         if (assinaturaAtual) {
-            return res.status(409).json({ error: 'ASSINATURA_JA_EXISTE' })
+            trackAssinaturaEvento({
+                evento: "checkout_failed",
+                source: "app",
+                status: "assinatura_existente",
+                contexto: req.body?.contexto,
+                offerId: codigoOferta,
+                casal: codCasal,
+                usuario: auth?.id,
+                assinaturaId: assinaturaAtual.id,
+                req,
+            });
+
+            return res.status(409).json({
+                error: 'ASSINATURA_JA_EXISTE',
+                message: 'Ja existe uma assinatura ativa ou em processamento para este casal.',
+            })
         }
 
         const oferta = await AssinaturaModel.getOfertaAtiva(codigoOferta)
 
         if (!oferta) {
-            return res.status(404).json({ error: 'OFERTA_INDISPONIVEL' })
+            trackAssinaturaEvento({
+                evento: "checkout_failed",
+                source: "app",
+                status: "oferta_indisponivel",
+                contexto: req.body?.contexto,
+                offerId: codigoOferta,
+                casal: codCasal,
+                usuario: auth?.id,
+                req,
+            });
+
+            return res.status(404).json({
+                error: 'OFERTA_INDISPONIVEL',
+                message: 'Esta oferta nao esta disponivel agora.',
+            })
         }
 
         const checkoutToken = jwt.sign(
             {
                 purpose: 'checkout',
-                cod_casal: auth.cod_casal,
+                cod_casal: codCasal,
                 userId: auth.id,
                 offerId: oferta.codigo,
             },
@@ -36,13 +141,32 @@ const createCheckout = async (req, res) => {
             { expiresIn: '15m' },
         )
 
+        trackAssinaturaEvento({
+            evento: "checkout_created",
+            source: "app",
+            status: "success",
+            contexto: req.body?.contexto,
+            offerId: oferta.codigo,
+            casal: codCasal,
+            usuario: auth?.id,
+            metadata: {
+                periodicidade: oferta.periodicidade,
+                promocional: Boolean(oferta.promocional),
+                valor: oferta.valor,
+            },
+            req,
+        });
+
         return res.status(200).json({
             message: 'Checkout criado com sucesso',
             checkoutToken,
         })
     } catch (error) {
         console.error('Erro ao criar checkout', error)
-        return res.status(500).json({ error: 'Erro ao criar checkout' })
+        return res.status(error.status || 500).json({
+            error: error.code || 'ERRO_CRIAR_CHECKOUT',
+            message: error.message || 'Nao foi possivel iniciar o checkout agora.',
+        })
     }
 }
 
@@ -54,23 +178,95 @@ const createAssinatura = (req, res) => {
     try {
         checkout = jwt.verify(checkoutToken, JWT_SECRET)
     } catch {
+        trackAssinaturaEvento({
+            evento: "payment_failed",
+            source: "checkout",
+            status: "checkout_expirado_ou_invalido",
+            req,
+        });
+
         return res.status(401).json({ error: 'CHECKOUT_EXPIRADO_OU_INVALIDO' })
     }
 
     if (checkout.purpose !== 'checkout' || !checkout.cod_casal || !checkout.offerId) {
+        trackAssinaturaEvento({
+            evento: "payment_failed",
+            source: "checkout",
+            status: "checkout_invalido",
+            offerId: checkout?.offerId,
+            casal: checkout?.cod_casal,
+            usuario: checkout?.userId,
+            req,
+        });
+
         return res.status(401).json({ error: 'CHECKOUT_INVALIDO' })
     }
+
+    trackAssinaturaEvento({
+        evento: "payment_submit",
+        source: "checkout",
+        status: "processing",
+        offerId: checkout.offerId,
+        casal: checkout.cod_casal,
+        usuario: checkout.userId,
+        metadata: { emailInformado: Boolean(email) },
+        req,
+    });
 
     AssinaturaModel.createAssinatura(checkout.offerId, checkout.cod_casal, email, token, (err, results) => {
         if (err) {
             console.error('Erro ao registrar assinatura', err);
-            return res.status(err.status || 500).json({
-                error: err.code || 'Erro ao registrar assinatura',
-                message: err.message,
+
+            const status = Number.isInteger(err?.status) ? err.status : 500;
+            const mercadoPagoCause = Array.isArray(err?.cause) ? err.cause[0]?.description : null;
+            const errorCode = typeof err === 'string'
+                ? err
+                : err?.code || err?.error || 'ERRO_REGISTRAR_ASSINATURA';
+            const message = typeof err === 'string'
+                ? 'Nao foi possivel registrar a assinatura agora.'
+                : err?.message || mercadoPagoCause || 'Nao foi possivel registrar a assinatura agora.';
+
+            trackAssinaturaEvento({
+                evento: "payment_failed",
+                source: "checkout",
+                status: errorCode,
+                offerId: checkout.offerId,
+                casal: checkout.cod_casal,
+                usuario: checkout.userId,
+                metadata: {
+                    mercadoPagoCause,
+                    httpStatus: status,
+                },
+                req,
+            });
+
+            return res.status(status).json({
+                error: errorCode,
+                message,
             });
         }
 
-        res.status(200).json({ message: 'Assinatura registrada com sucesso', results, init_point: results.init_point });
+        trackAssinaturaEvento({
+            evento: "payment_success",
+            source: "checkout",
+            status: results?.status || "submitted",
+            offerId: checkout.offerId,
+            casal: checkout.cod_casal,
+            usuario: checkout.userId,
+            mpPreapprovalId: results?.id,
+            metadata: {
+                initPoint: Boolean(results?.init_point),
+            },
+            req,
+        });
+
+        res.status(200).json({
+            message: 'Assinatura registrada com sucesso',
+            results,
+            status: results?.status,
+            assinaturaId: results?.id,
+            init_point: results?.init_point,
+        });
     })
 }
 
@@ -104,6 +300,15 @@ const mpWebHook = async (req, res) => {
 
         console.log("Webhook Mercado Pago recebido", { type, id: data?.id });
 
+        trackAssinaturaEvento({
+            evento: "webhook_received",
+            source: "mercado_pago",
+            status: type,
+            mpPreapprovalId: data?.id,
+            metadata: { type },
+            req,
+        });
+
         if (type !== "subscription_preapproval") {
             return res.sendStatus(200);
         }
@@ -121,11 +326,32 @@ const mpWebHook = async (req, res) => {
         //Busca a assinatura no banco de dados pelo código da assinatura MP
         const assinatura = await AssinaturaModel.buscarAssinaturaPorMPId(preapprovalId);
         if (!assinatura) {
+            trackAssinaturaEvento({
+                evento: "webhook_subscription_missing",
+                source: "mercado_pago",
+                status,
+                mpPreapprovalId: preapprovalId,
+                req,
+            });
             console.warn("Assinatura não encontrada:", preapprovalId);
             return res.sendStatus(200);
         }
 
         await AssinaturaModel.atualizarStatusAssinatura(preapprovalId, status, assinaturaMP);
+
+        trackAssinaturaEvento({
+            evento: status === "authorized" ? "subscription_activated" : "subscription_status_updated",
+            source: "mercado_pago",
+            status,
+            casal: assinatura.casal,
+            assinaturaId: assinatura.id,
+            mpPreapprovalId: preapprovalId,
+            metadata: {
+                mpStatus: status,
+                frequencyType: assinaturaMP?.auto_recurring?.frequency_type,
+            },
+            req,
+        });
 
         console.log("Assinatura atualizada:", preapprovalId);
 
@@ -135,11 +361,21 @@ const mpWebHook = async (req, res) => {
 
         console.error("Erro webhook MP:", error);
 
+        trackAssinaturaEvento({
+            evento: "webhook_failed",
+            source: "mercado_pago",
+            status: error?.code || "erro",
+            metadata: { message: error?.message },
+            req,
+        });
+
         return res.sendStatus(500);
     }
 };
 
 const getOfertas = async (req, res) => {
+    const contexto = req.query?.contexto || 'site_pricing';
+
     AssinaturaModel.getOfertas((err, results) => {
         if (err) {
             console.error('Erro ao  buscar ofertas', err);
@@ -147,7 +383,7 @@ const getOfertas = async (req, res) => {
         }
 
         res.status(200).json({ message: 'Ofertas encontradas com sucesso', results});
-    })
+    }, contexto)
 }
 
 const cancelarAssinatura = async (req, res) => {
@@ -155,10 +391,37 @@ const cancelarAssinatura = async (req, res) => {
         const auth = req.authContext
 
         if (!auth?.cod_casal) {
+            trackAssinaturaEvento({
+                evento: "subscription_cancel_failed",
+                source: "app",
+                status: "casal_nao_identificado",
+                usuario: auth?.id,
+                req,
+            });
+
             return res.status(400).json({ error: 'ASSINATURA_INVALIDA' })
         }
 
+        trackAssinaturaEvento({
+            evento: "subscription_cancel_requested",
+            source: "app",
+            status: "requested",
+            casal: auth.cod_casal,
+            usuario: auth.id,
+            req,
+        });
+
         const results = await AssinaturaModel.cancelarAssinatura(auth.cod_casal)
+
+        trackAssinaturaEvento({
+            evento: "subscription_cancel_success",
+            source: "app",
+            status: results?.status,
+            casal: auth.cod_casal,
+            usuario: auth.id,
+            assinaturaId: results?.id,
+            req,
+        });
 
         return res.status(200).json({
             message: 'Assinatura cancelada com sucesso',
@@ -166,6 +429,16 @@ const cancelarAssinatura = async (req, res) => {
         })
     } catch (error) {
         console.error('Erro ao cancelar assinatura', error)
+        trackAssinaturaEvento({
+            evento: "subscription_cancel_failed",
+            source: "app",
+            status: error?.code || "erro",
+            casal: req.authContext?.cod_casal,
+            usuario: req.authContext?.id,
+            metadata: { message: error?.message },
+            req,
+        });
+
         return res.status(error.status || 500).json({
             error: error.code || 'ERRO_CANCELAR_ASSINATURA',
             message: error.message || 'Nao foi possivel cancelar a assinatura.',
@@ -173,4 +446,46 @@ const cancelarAssinatura = async (req, res) => {
     }
 }
 
-export default { createCheckout, createAssinatura, mpWebHook, getOfertas, cancelarAssinatura }
+const registrarEventoConversao = async (req, res) => {
+    const {
+        event,
+        evento,
+        source,
+        contexto,
+        offerId,
+        checkoutToken,
+        status,
+        metadata,
+    } = req.body || {};
+
+    const nomeEvento = evento || event;
+
+    if (!nomeEvento) {
+        return res.status(400).json({
+            error: "EVENTO_INVALIDO",
+            message: "Evento de conversao nao informado.",
+        });
+    }
+
+    const auth = getAuthContextFromBearer(req);
+    const checkout = getCheckoutContext(checkoutToken);
+
+    const eventId = await AssinaturaEventosModel.registrar({
+        evento: nomeEvento,
+        source: source || "client",
+        contexto,
+        offerId: offerId || checkout?.offerId,
+        casal: auth?.cod_casal || checkout?.cod_casal,
+        usuario: auth?.id || checkout?.userId,
+        status,
+        metadata,
+        req,
+    });
+
+    return res.status(202).json({
+        message: "Evento recebido",
+        eventId,
+    });
+}
+
+export default { createCheckout, createAssinatura, mpWebHook, getOfertas, cancelarAssinatura, registrarEventoConversao }

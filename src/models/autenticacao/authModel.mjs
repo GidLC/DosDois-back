@@ -13,14 +13,44 @@ import { fileURLToPath } from 'url';
 import { formataDataBr } from "../../data/formataDataBR/formataDataBR.mjs";
 import { formataFone } from "../../data/formataFone/formataFone.mjs";
 import { JWT_EXPIRES } from "../../data/apiConfig.mjs";
-import { incrementaUso } from "../../features/assinaturas/utils/IncrementaUso.mjs";
-import { loadPlanFunction } from "../../middlewares/assinatura.mjs";
+import { incrementaUso } from "../../features/assinaturas/utils/incrementaUso.mjs";
+import { ensureFreeSubscription, loadPlanFunction } from "../../middlewares/assinatura.mjs";
 import { hashPassword, verifyPassword } from "../../data/security/passwordHash.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MAX_PROFILE_IMAGE_BYTES = Number(process.env.MAX_PROFILE_IMAGE_BYTES ?? 2 * 1024 * 1024);
 const ALLOWED_PROFILE_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 const APP_URL = 'https://dosdoisapp.com.br';
+
+const safeIncrementaUso = async (casal, modulo, qtd = 1) => {
+  try {
+    await incrementaUso(casal, modulo, qtd);
+  } catch (error) {
+    console.error(`Não foi possível atualizar contador de uso (${modulo}) para o casal ${casal}:`, error);
+  }
+};
+
+const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url }) => {
+  const notifications = [];
+
+  if (email) {
+    notifications.push(enviaEmail(email, "Cadastro no DosDois", EmailCadastro(nome, codigoCasal, url)));
+  }
+
+  if (fone) {
+    notifications.push(enviaWhats(
+      fone,
+      `Bem-vindo ao app *DosDois*! Para que seu parceiro se vincule a você, acesse: ${url}`
+    ));
+  }
+
+  const results = await Promise.allSettled(notifications);
+  results.forEach((result) => {
+    if (result.status === 'rejected') {
+      console.error('Cadastro criado, mas a notificação inicial falhou:', result.reason);
+    }
+  });
+};
 
 const hasExpectedImageSignature = (buffer, ext) => {
   if (['jpg', 'jpeg'].includes(ext)) {
@@ -68,8 +98,7 @@ const getUserData = async (usuario, remember) => {
     });
   });
 
-  const plano = await loadPlanFunction(casal.cod_casal)
-  console.log(plano)
+  const plano = await loadPlanFunction(casal?.cod_casal || usuario.casal)
 
   //Verifica pendência de WhatsApp
   let whatsPend = false;
@@ -98,13 +127,14 @@ const getUserData = async (usuario, remember) => {
       fone: usuario.fone,
       sexo: usuario.sexo,
       incompleto: usuario.incompleto,
-      cod_casal: casal?.cod_casal || null,
+      cod_casal: casal?.cod_casal || usuario.casal || null,
       casal_formado: 0,
       link_vinculo: linkVinculo,
       plano,
       whatsPend,
       whats_verificado: usuario.whats_verificado,
       onboarding_concluido: usuario.onboarding_concluido,
+      foto: usuario.foto || usuario.perfil_url,
     };
 
     const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
@@ -137,6 +167,7 @@ const getUserData = async (usuario, remember) => {
     whatsPend,
     whats_verificado: usuario.whats_verificado,
     onboarding_concluido: usuario.onboarding_concluido,
+    foto: usuario.foto || usuario.perfil_url,
   };
 
   const token = remember ? createToken(userData) : createToken(userData, JWT_EXPIRES)
@@ -162,16 +193,16 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
 
   // Cria usuário
   const queryUsuario = `
-    INSERT INTO usuario (nome, email, ${senha ? "senha," : ""} casal, dt_criacao, fone, sexo, foto)
-    VALUES (?, ?, ${senha ? "?," : ""} ?, NOW(), ?, ?, ?)
+    INSERT INTO usuario (nome, email, ${senha ? "senha," : ""} casal, dt_criacao, fone, sexo, foto, incompleto)
+    VALUES (?, ?, ${senha ? "?," : ""} ?, NOW(), ?, ?, ?, ?)
   `;
 
   const usuario = await new Promise((resolve, reject) => {
     pool.query(
       queryUsuario,
       senha
-        ? [nome, email, senhaHash, codigoCasal, fone, sexo, foto]
-        : [nome, email, codigoCasal, fone, sexo, foto],
+        ? [nome, email, senhaHash, codigoCasal, fone, sexo, foto, 0]
+        : [nome, email, codigoCasal, fone, sexo, foto, 1],
       (err, results) => {
         if (err) reject(err);
         else resolve(results);
@@ -189,6 +220,8 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
       (err, results) => (err ? reject(err) : resolve(results))
     );
   });
+
+  await ensureFreeSubscription(codigoCasal);
 
   // Insere categorias padrões
   const queryCategoria = `
@@ -209,7 +242,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
   INSERT INTO categoria_tr (nome, tipo, cor, icone, casal, cat_sistema) VALUES("*Ajuste*",1, 3, 37, ?, 1);
   `;
 
-  await incrementaUso(codigoCasal, "categorias", 15)
+  await safeIncrementaUso(codigoCasal, "categorias", 15)
 
   const queries = queryCategoria.split(";").filter((q) => q.trim() !== "");
   await Promise.all(
@@ -232,7 +265,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
     );
   });
 
-  await incrementaUso(codigoCasal, "bancos")
+  await safeIncrementaUso(codigoCasal, "bancos")
 
   // Cria vínculo e envia notificações
   const uuid = crypto.randomUUID();
@@ -246,18 +279,16 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
     );
   });
 
-  if (email) {
-    await enviaEmail(email, "Cadastro no DosDois", EmailCadastro(nome, codigoCasal, url));
-  }
+  await sendCadastroNotifications({ email, fone, nome, codigoCasal, url });
 
-  if (fone) {
-    await enviaWhats(
-      fone,
-      `Bem-vindo ao app *DosDois*! Para que seu parceiro se vincule a você, acesse: ${url}`
-    );
-  }
+  const [usuarioCriado] = await new Promise((resolve, reject) => {
+    pool.query('SELECT * FROM usuario WHERE id = ?', [userId], (err, results) => {
+      if (err) reject(err);
+      else resolve(results);
+    });
+  });
 
-  return { id: userId, nome, email, casal: codigoCasal };
+  return usuarioCriado || { id: userId, nome, email, casal: codigoCasal, incompleto: senha ? 0 : 1, foto };
 }
 
 class AuthModel {
@@ -266,7 +297,7 @@ class AuthModel {
       await criarUsuarioBase({ nome, email, senha, fone, sexo, foto: null });
       return callback(null, "Usuário cadastrado com sucesso");
     } catch (error) {
-      return callback({ message: `Erro ao cadastrar usuário. ${error}` }, null);
+      return callback(error, null);
     }
   };
 
@@ -573,8 +604,8 @@ class AuthModel {
   }
 
   static editUser = async (nome, email, fone, id, foto, senha, sexo, callback) => {
-    const google = (senha && sexo) ? true : false
-    const senhaHash = google && await hashPassword(senha);
+    const atualizaSenha = Boolean(senha)
+    const senhaHash = atualizaSenha && await hashPassword(senha);
 
     let caminhoFoto = null;
 
@@ -609,22 +640,50 @@ class AuthModel {
       caminhoFoto = `uploads/perfis/${nomeArquivo}`;
     }
 
-    const fotoClause = caminhoFoto ? `, perfil_url = ?` : ``
-    const query = `UPDATE usuario SET nome = ?, fone = ?${fotoClause}${google ? `, senha = ?, sexo = ?` : ` `}WHERE id = ?`
-
+    const updates = ['nome = ?', 'fone = ?']
     let params = [nome, fone]
 
-    if (caminhoFoto) params.push(String(caminhoFoto))
-    if (google) params.push(senhaHash, sexo)
+    if (caminhoFoto) {
+      updates.push('perfil_url = ?')
+      params.push(String(caminhoFoto))
+    }
+
+    if (atualizaSenha) {
+      updates.push('senha = ?')
+      params.push(senhaHash)
+    }
+
+    if (sexo !== undefined && sexo !== null && sexo !== '') {
+      updates.push('sexo = ?')
+      updates.push('incompleto = 0')
+      params.push(sexo)
+    }
+
+    const query = `UPDATE usuario SET ${updates.join(', ')} WHERE id = ?`
     params.push(id)
 
-    pool.query(query, params, (err, results) => {
+    pool.query(query, params, async (err, results) => {
       if (err) {
         console.error(err)
         return callback(err, null)
       }
 
-      return callback(null, results)
+      try {
+        const [usuarioAtualizado] = await new Promise((resolve, reject) => {
+          pool.query('SELECT * FROM usuario WHERE id = ?', [id], (err, results) => {
+            if (err) reject(err);
+            else resolve(results);
+          });
+        });
+
+        if (!usuarioAtualizado) return callback('Usuário não encontrado', null);
+
+        const result = await getUserData(usuarioAtualizado, null);
+        return callback(null, result)
+      } catch (error) {
+        console.error(error)
+        return callback(error, null)
+      }
     })
   }
 

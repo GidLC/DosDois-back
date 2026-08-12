@@ -1,33 +1,144 @@
 import { queryAsync } from "../data/queryAsync/queryAsync.mjs";
 
+const loadFreePlan = async () => {
+    const [freePlan] = await queryAsync(
+        `SELECT * FROM planos WHERE LOWER(codigo) = 'free' LIMIT 1`
+    );
+
+    return freePlan || { codigo: 'FREE' };
+};
+
+export const ensureFreeSubscription = async (auth) => {
+    if (!auth) return null;
+
+    const [existingSubscription] = await queryAsync(
+        `SELECT id FROM assinaturas WHERE casal = ? LIMIT 1`,
+        [auth]
+    );
+
+    if (existingSubscription) return existingSubscription;
+
+    const freePlan = await loadFreePlan();
+    if (!freePlan?.id) {
+        console.error(`Plano FREE não encontrado; assinatura FREE não criada para o casal ${auth}`);
+        return null;
+    }
+
+    await queryAsync(
+        `INSERT INTO assinaturas (casal, plano_id, status, inicio)
+         SELECT ?, ?, 'ativa', CURDATE()
+         WHERE NOT EXISTS (
+             SELECT 1 FROM assinaturas WHERE casal = ? LIMIT 1
+         )`,
+        [auth, freePlan.id, auth]
+    );
+
+    const [freeSubscription] = await queryAsync(
+        `SELECT id FROM assinaturas WHERE casal = ? LIMIT 1`,
+        [auth]
+    );
+
+    return freeSubscription || null;
+};
+
+const usageCountQueries = {
+    bancos: `SELECT COUNT(*) AS total FROM banco WHERE casal = ? AND arquivo = 0`,
+    categorias: `SELECT COUNT(*) AS total FROM categoria_tr WHERE casal = ?`,
+    cartoes: `SELECT COUNT(*) AS total FROM cartoes WHERE casal = ?`,
+    tags: `SELECT COUNT(*) AS total FROM tags WHERE casal = ?`,
+    objetivos: `SELECT COUNT(*) AS total FROM objetivo WHERE casal = ? AND status = 0`,
+};
+
+const loadCurrentUsage = async (auth, moduleCode, moduleId) => {
+    const countQuery = usageCountQueries[moduleCode];
+
+    if (countQuery) {
+        const [row] = await queryAsync(countQuery, [auth]);
+        const uso = Number(row?.total || 0);
+
+        await queryAsync(`
+      INSERT INTO contador_uso (casal, modulo, uso)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE uso = VALUES(uso)
+    `, [auth, moduleId, uso]);
+
+        return uso;
+    }
+
+    const [usage] = await queryAsync(`
+      SELECT uso FROM contador_uso
+      WHERE casal = ? AND modulo = ?
+    `, [auth, moduleId]);
+
+    return Number(usage?.uso || 0);
+};
+
 //Carrega dados da assinatura do usuário
 export const loadPlan = async (req, res, next) => {
     const auth = req.authContext?.cod_casal || req.headers.auth;
 
-    const [assinatura] = await queryAsync(`
-    SELECT p.*, a.fim
+    if (!auth) {
+        req.plano = await loadFreePlan();
+        return next();
+    }
+
+    let [assinatura] = await queryAsync(`
+    SELECT p.*, a.fim, a.id AS assinatura_id
     FROM assinaturas AS a
     JOIN planos p ON p.id = a.plano_id
     WHERE a.casal = ?
       AND a.status = 'ativa'
+    ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
+    LIMIT 1
   `, [auth]);
 
-    req.plano = assinatura || { codigo: 'FREE' };
+    if (!assinatura) {
+        await ensureFreeSubscription(auth);
+        [assinatura] = await queryAsync(`
+    SELECT p.*, a.fim, a.id AS assinatura_id
+    FROM assinaturas AS a
+    JOIN planos p ON p.id = a.plano_id
+    WHERE a.casal = ?
+      AND a.status = 'ativa'
+    ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
+    LIMIT 1
+  `, [auth]);
+    }
+
+    req.plano = assinatura || await loadFreePlan();
 
     next();
 };
 
 export const loadPlanFunction = async (auth) => {
+    if (!auth) {
+        return await loadFreePlan();
+    }
 
-    const [assinatura] = await queryAsync(`
-    SELECT p.*, a.fim
+    let [assinatura] = await queryAsync(`
+    SELECT p.*, a.fim, a.id AS assinatura_id
     FROM assinaturas AS a
     JOIN planos p ON p.id = a.plano_id
     WHERE a.casal = ?
       AND a.status = 'ativa'
+    ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
+    LIMIT 1
   `, [auth]);
 
-    return assinatura
+    if (!assinatura) {
+        await ensureFreeSubscription(auth);
+        [assinatura] = await queryAsync(`
+    SELECT p.*, a.fim, a.id AS assinatura_id
+    FROM assinaturas AS a
+    JOIN planos p ON p.id = a.plano_id
+    WHERE a.casal = ?
+      AND a.status = 'ativa'
+    ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
+    LIMIT 1
+  `, [auth]);
+    }
+
+    return assinatura || await loadFreePlan();
 };
 
 //Verifica os limites de cadastro do usuário
@@ -52,29 +163,48 @@ export const checkModuleLimit = (moduleCode, permitir = null) => {
         }
 
         //Busca limites do plano em relação a esse módulo(normalmente a quantidade de cadastros possíveis)
-        const [planModule] = await queryAsync(`
-      SELECT pm.limite, pm.ativo, pm.por_casal
-      FROM assinaturas as a
-      JOIN planos_limites as pm ON pm.plano_id = a.plano_id
-      WHERE a.casal = ? AND pm.modulo = ?
-    `, [auth, module.id]);
+        const plano = req.plano || await loadFreePlan();
 
-    console.log({auth, id: module.id})
+        const [planModule] = plano.id
+            ? await queryAsync(`
+        SELECT pm.limite, pm.ativo, pm.por_casal
+        FROM planos_limites AS pm
+        WHERE pm.plano_id = ? AND pm.modulo = ?
+      `, [plano.id, module.id])
+            : await queryAsync(`
+        SELECT pm.limite, pm.ativo, pm.por_casal
+        FROM assinaturas AS a
+        JOIN planos_limites AS pm ON pm.plano_id = a.plano_id
+        WHERE a.casal = ? AND a.status = 'ativa' AND pm.modulo = ?
+      `, [auth, module.id]);
 
         //Se não foi encontrado o módulo ou não está ativo
-        if (!planModule || !planModule.ativo) {
-            return res.status(200).json({ error: 'MODULE_NOT_ALLOWED' });
+        const isFreePlan = String(plano?.codigo || '').toLowerCase() === 'free';
+
+        if (!planModule) {
+            if (!isFreePlan) {
+                return next();
+            }
+
+            return res.status(200).json({
+                error: 'MODULE_NOT_ALLOWED',
+                module: moduleCode,
+                message: 'Este recurso nao esta disponivel no plano atual.'
+            });
+        }
+
+        if (!planModule.ativo) {
+            return res.status(200).json({
+                error: 'MODULE_NOT_ALLOWED',
+                module: moduleCode,
+                message: 'Este recurso nao esta disponivel no plano atual.'
+            });
         }
 
         //Se o tipo de limitação é contado e o usuário possui um plano limitador(especialmente free)
         if (module.tipo === 'limite' && planModule.limite !== -1) {
             //Busca a quantidade usada pelo usuário
-            const [usage] = await queryAsync(`
-        SELECT uso FROM contador_uso
-        WHERE casal = ? AND modulo = ?
-      `, [auth, module.id]);
-
-            let uso = usage.uso
+            let uso = await loadCurrentUsage(auth, moduleCode, module.id)
             let limite = planModule.limite
 
             //Caso a limitação seja por usuário divide a limitação no banco(por casal) por 2, tornando-a individual

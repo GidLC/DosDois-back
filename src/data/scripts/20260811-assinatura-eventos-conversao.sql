@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS assinatura_eventos_conversao (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  evento VARCHAR(80) NOT NULL,
+  source VARCHAR(40) NOT NULL DEFAULT 'backend',
+  contexto VARCHAR(80) NULL,
+  offer_id VARCHAR(80) NULL,
+  casal INT NULL,
+  usuario INT NULL,
+  assinatura_id BIGINT NULL,
+  mp_preapproval_id VARCHAR(120) NULL,
+  status VARCHAR(60) NULL,
+  metadata_json TEXT NULL,
+  user_agent VARCHAR(255) NULL,
+  ip_hash CHAR(64) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_ass_conv_evento_created (evento, created_at),
+  INDEX idx_ass_conv_casal_created (casal, created_at),
+  INDEX idx_ass_conv_usuario_created (usuario, created_at),
+  INDEX idx_ass_conv_offer_created (offer_id, created_at),
+  INDEX idx_ass_conv_status_created (status, created_at)
+);

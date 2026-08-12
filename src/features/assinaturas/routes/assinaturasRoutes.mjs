@@ -7,6 +7,7 @@ assinaturasRouter.post('/createCheckout', autenticarJWT, assinaturasController.c
 assinaturasRouter.post('/cancelar', autenticarJWT, assinaturasController.cancelarAssinatura)
 assinaturasRouter.post('/createSub', assinaturasController.createAssinatura)
 assinaturasRouter.post('/mpWebHook', assinaturasController.mpWebHook)
+assinaturasRouter.post('/eventos', assinaturasController.registrarEventoConversao)
 assinaturasRouter.get('/ofertas', assinaturasController.getOfertas)
 
 export default assinaturasRouter

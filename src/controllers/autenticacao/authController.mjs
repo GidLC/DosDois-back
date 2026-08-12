@@ -29,7 +29,11 @@ const cadastroUsuario = (req, res) => {
       return res.status(400).json({ error: 'Esse e-mail ou celular já está cadastrado' });
     } else*/ if (err) {
       console.error('Erro ao salvar o usuário:', err);
-      return res.status(500).json({ error: 'Erro ao salvar o usuário' });
+      const duplicate = err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062;
+      const message = duplicate
+        ? 'Esse e-mail ou celular já está cadastrado.'
+        : 'Não foi possível concluir o cadastro agora. Tente novamente em alguns instantes.';
+      return res.status(duplicate ? 409 : 500).json({ error: message });
     }
 
     res.status(200).json({ message: 'Usuário cadastrado com sucesso', resultado });
@@ -119,8 +123,9 @@ const mudaSenha = (req, res) => {
 //Autenticação JWT
 const editUser = (req, res) => {
   const { nome, email, fone, id, foto, senha, sexo } = req.body
+  const idUser = req.authContext?.id || id
 
-  AuthModel.editUser(nome, email, fone, id, foto, senha, sexo, (err, results) => {
+  AuthModel.editUser(nome, email, fone, idUser, foto, senha, sexo, (err, results) => {
     if (err) {
       return res.status(500).json({ error: `Erro ao realizar a alteração. ${err}` })
     }

@@ -6,7 +6,7 @@ async function run() {
   log('Iniciando migração de planos FREE...');
 
   const [planFree] = await queryAsync(
-    `SELECT id FROM planos WHERE codigo = 'free'`
+    `SELECT id FROM planos WHERE LOWER(codigo) = 'free'`
   );
 
   if (!planFree) {
@@ -64,12 +64,12 @@ async function migrateUsage(casal) {
 
     //Só conta os bancos que estiverem ativos desconsiderando os arquivados
     if (m.name == "bancos") {
-      queryMod = queryMod += `AND arquivo = 0`
+      queryMod += ` AND arquivo = 0`
     }
 
     //Conta apenas os obejtivos que estiverem em andamento
     if (m.name == "objetivos") {
-      queryMod = queryMod += `AND status = 0`
+      queryMod += ` AND status = 0`
     }
 
     const [row] = await queryAsync(

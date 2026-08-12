@@ -62,6 +62,7 @@ const rollback = (connection) =>
 
 const isAssinaturaCorrente = (assinatura) => {
     if (!assinatura) return false;
+    if (String(assinatura.plano_codigo || assinatura.codigo || '').toLowerCase() === 'free') return false;
     if (["ativa", "pendente"].includes(assinatura.status)) return true;
     if (assinatura.status !== "criando") return false;
 
@@ -69,6 +70,34 @@ const isAssinaturaCorrente = (assinatura) => {
     const reservaExpiraEm = 20 * 60 * 1000;
 
     return updatedAt && Date.now() - updatedAt < reservaExpiraEm;
+};
+
+const agrupaBeneficiosPorPlano = (beneficios = []) => {
+    return beneficios.reduce((acc, beneficio) => {
+        const planoId = beneficio.plano_id;
+
+        if (!acc[planoId]) {
+            acc[planoId] = [];
+        }
+
+        acc[planoId].push({
+            id: beneficio.id,
+            codigo: beneficio.codigo,
+            modulo_id: beneficio.modulo_id,
+            titulo: beneficio.titulo_contexto || beneficio.titulo,
+            titulo_base: beneficio.titulo,
+            descricao: beneficio.descricao_contexto || beneficio.descricao_curta,
+            descricao_curta: beneficio.descricao_curta,
+            descricao_longa: beneficio.descricao_longa,
+            icone: beneficio.icone,
+            categoria: beneficio.categoria,
+            destaque: Boolean(beneficio.destaque),
+            valor_texto: beneficio.valor_texto,
+            ordem: beneficio.ordem_contexto ?? beneficio.ordem_plano ?? beneficio.ordem,
+        });
+
+        return acc;
+    }, {});
 };
 
 class AssinaturaModel {
@@ -89,12 +118,14 @@ class AssinaturaModel {
 
     static getAssinaturaCorrente = async (casal) => {
         const [assinatura] = await queryAsync(`
-            SELECT *
-            FROM assinaturas
-            WHERE casal = ?
+            SELECT a.*, p.codigo AS plano_codigo
+            FROM assinaturas AS a
+            JOIN planos AS p ON p.id = a.plano_id
+            WHERE a.casal = ?
+              AND LOWER(p.codigo) <> 'free'
               AND (
-                status IN ('ativa', 'pendente')
-                OR (status = 'criando' AND updated_at >= DATE_SUB(NOW(), INTERVAL 20 MINUTE))
+                a.status IN ('ativa', 'pendente')
+                OR (a.status = 'criando' AND a.updated_at >= DATE_SUB(NOW(), INTERVAL 20 MINUTE))
               )
             LIMIT 1
         `, [casal])
@@ -138,10 +169,11 @@ class AssinaturaModel {
             const [assinatura] = await connectionQuery(
                 connection,
                 `
-                    SELECT *
-                    FROM assinaturas
-                    WHERE casal = ?
-                    ORDER BY id DESC
+                    SELECT a.*, p.codigo AS plano_codigo
+                    FROM assinaturas AS a
+                    LEFT JOIN planos AS p ON p.id = a.plano_id
+                    WHERE a.casal = ?
+                    ORDER BY a.id DESC
                     LIMIT 1
                     FOR UPDATE
                 `,
@@ -364,13 +396,67 @@ class AssinaturaModel {
         };
     }
 
-    static getOfertas = async (callback) => {
+    static getBeneficiosPorPlano = async (planoIds = [], contexto = 'site_pricing') => {
+        if (!planoIds.length) return {};
+
+        const placeholders = planoIds.map(() => '?').join(',');
+
+        const beneficios = await queryAsync(`
+            SELECT
+                pb.plano_id,
+                pb.destaque,
+                pb.valor_texto,
+                pb.ordem AS ordem_plano,
+                b.id,
+                b.codigo,
+                b.modulo_id,
+                b.titulo,
+                b.descricao_curta,
+                b.descricao_longa,
+                b.icone,
+                b.categoria,
+                b.ordem,
+                bc.titulo_override AS titulo_contexto,
+                bc.descricao_override AS descricao_contexto,
+                bc.ordem AS ordem_contexto
+            FROM planos_beneficios AS pb
+            JOIN beneficios AS b ON b.id = pb.beneficio_id
+            LEFT JOIN beneficios_contextos AS bc
+                ON bc.beneficio_id = b.id
+               AND bc.contexto = ?
+               AND bc.ativo = 1
+            WHERE pb.plano_id IN (${placeholders})
+              AND pb.incluido = 1
+              AND pb.ativo = 1
+              AND b.ativo = 1
+            ORDER BY
+                pb.plano_id,
+                pb.destaque DESC,
+                COALESCE(bc.ordem, pb.ordem, b.ordem),
+                b.titulo
+        `, [contexto, ...planoIds]);
+
+        return agrupaBeneficiosPorPlano(beneficios);
+    }
+
+    static getOfertas = async (callback, contexto = 'site_pricing') => {
         try {
-            const queryOfertas = `SELECT * FROM planos_ofertas WHERE ativo = 1`
+            const queryOfertas = `
+                SELECT *
+                FROM planos_ofertas
+                WHERE ativo = 1
+                ORDER BY prioridade DESC, valor ASC
+            `
 
             const ofertas = await queryAsync(queryOfertas)
+            const planoIds = [...new Set(ofertas.map(oferta => oferta.plano_id).filter(Boolean))];
+            const beneficiosPorPlano = await this.getBeneficiosPorPlano(planoIds, contexto);
+            const ofertasComBeneficios = ofertas.map(oferta => ({
+                ...oferta,
+                beneficios: beneficiosPorPlano[oferta.plano_id] || [],
+            }));
 
-            return callback(null, ofertas)
+            return callback(null, ofertasComBeneficios)
         } catch (error) {
             return callback(error, null)
         }

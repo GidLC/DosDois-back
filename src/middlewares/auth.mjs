@@ -14,7 +14,7 @@ export const autenticarJWT = (req, res, next) => {
     req.usuario = usuario;
     req.authContext = {
       id: usuario.id,
-      cod_casal: usuario.cod_casal,
+      cod_casal: usuario.cod_casal ?? usuario.casal ?? usuario.auth ?? null,
       id_parceiro: usuario.id_parceiro ?? null,
     };
 
