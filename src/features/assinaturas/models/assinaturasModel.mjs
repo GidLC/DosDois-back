@@ -23,6 +23,29 @@ const statusMpToDb = (status) => {
     return statusMap[status] || status;
 };
 
+const fetchMercadoPagoPreapproval = async (mpPreapprovalId) => {
+    const response = await fetch(`https://api.mercadopago.com/preapproval/${mpPreapprovalId}`, {
+        method: "GET",
+        headers: {
+            "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
+            "Content-Type": "application/json"
+        }
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw {
+            code: "MERCADO_PAGO_GET_ERROR",
+            status: response.status || 502,
+            message: data?.message || "Nao foi possivel consultar a assinatura no Mercado Pago.",
+            mercadoPago: data,
+        };
+    }
+
+    return data;
+};
+
 const connectionQuery = (connection, sql, params = []) =>
     new Promise((resolve, reject) => {
         connection.query(sql, params, (err, results) => {
@@ -140,6 +163,21 @@ class AssinaturaModel {
             WHERE casal = ?
               AND status = 'ativa'
             ORDER BY id DESC
+            LIMIT 1
+        `, [casal])
+
+        return assinatura
+    }
+
+    static getAssinaturaCancelavel = async (casal) => {
+        const [assinatura] = await queryAsync(`
+            SELECT a.*, p.codigo AS plano_codigo
+            FROM assinaturas AS a
+            JOIN planos AS p ON p.id = a.plano_id
+            WHERE a.casal = ?
+              AND LOWER(p.codigo) <> 'free'
+              AND a.status IN ('ativa', 'pendente', 'criando')
+            ORDER BY FIELD(a.status, 'ativa', 'pendente', 'criando'), a.id DESC
             LIMIT 1
         `, [casal])
 
@@ -267,7 +305,8 @@ class AssinaturaModel {
                     external_reference: casal,
                     payer_email: email,
                     preapproval_plan_id: plan.mpPlanId,
-                    card_token_id: token
+                    card_token_id: token,
+                    status: "authorized"
                 })
             });
 
@@ -288,7 +327,9 @@ class AssinaturaModel {
                     created_at = ?,
                     updated_at = ?
                 WHERE casal = ?`,
-                [plan.id, "pendente", data.status, data.id, data.date_created, data.last_modified, casal])
+                [plan.id, statusMpToDb(data.status), data.status, data.id, data.date_created, data.last_modified, casal])
+
+            await this.atualizarStatusAssinatura(data.id, data.status, data);
 
             return callback(null, data);
         } catch (error) {
@@ -310,7 +351,7 @@ class AssinaturaModel {
     static atualizarStatusAssinatura = async (mpId, status, assinatura) => {
         const statusDB = statusMpToDb(status)
 
-        if (status == "authorized") {
+        if (status == "authorized" && assinatura?.date_created && assinatura?.auto_recurring?.frequency_type) {
             const dataAssinatura = formataDataBr(assinatura.date_created)
             let fimAssinatura = new Date(dataAssinatura)
 
@@ -348,21 +389,42 @@ class AssinaturaModel {
             };
         }
 
-        const assinatura = await this.getAssinaturaAtiva(casal);
+        const assinatura = await this.getAssinaturaCancelavel(casal);
 
         if (!assinatura) {
             throw {
-                code: "ASSINATURA_ATIVA_NAO_ENCONTRADA",
+                code: "ASSINATURA_CANCELAVEL_NAO_ENCONTRADA",
                 status: 404,
-                message: "Nenhuma assinatura ativa encontrada.",
+                message: "Nenhuma assinatura paga em aberto encontrada.",
             };
         }
 
         if (!assinatura.mp_preapproval_id) {
-            throw {
-                code: "ASSINATURA_SEM_MERCADO_PAGO",
-                status: 409,
-                message: "Esta assinatura nao possui identificador do Mercado Pago.",
+            await queryAsync(`
+                UPDATE assinaturas
+                SET status = 'erro',
+                    mp_status = 'cancel_local_sem_mp',
+                    updated_at = NOW()
+                WHERE id = ?
+            `, [assinatura.id]);
+
+            return {
+                id: assinatura.id,
+                status: "erro",
+                mp_status: "cancel_local_sem_mp",
+            };
+        }
+
+        const assinaturaMP = await fetchMercadoPagoPreapproval(assinatura.mp_preapproval_id);
+        const statusAtualMP = assinaturaMP.status;
+
+        if (["canceled", "cancelled"].includes(statusAtualMP)) {
+            await this.atualizarStatusAssinatura(assinatura.mp_preapproval_id, statusAtualMP, assinaturaMP);
+
+            return {
+                id: assinatura.id,
+                status: statusMpToDb(statusAtualMP),
+                mp_status: statusAtualMP,
             };
         }
 
@@ -379,10 +441,29 @@ class AssinaturaModel {
 
         if (!response.ok) {
             console.error("Erro ao cancelar assinatura no Mercado Pago:", data);
+
+            if (statusAtualMP === "pending") {
+                await queryAsync(`
+                    UPDATE assinaturas
+                    SET status = 'erro',
+                        mp_status = ?,
+                        updated_at = NOW()
+                    WHERE id = ?
+                `, [statusAtualMP, assinatura.id]);
+
+                return {
+                    id: assinatura.id,
+                    status: "erro",
+                    mp_status: statusAtualMP,
+                    warning: "preapproval_pending_not_canceled",
+                };
+            }
+
             throw {
                 code: "MERCADO_PAGO_CANCEL_ERROR",
                 status: response.status || 502,
-                message: "Nao foi possivel cancelar a assinatura no Mercado Pago.",
+                message: data?.message || data?.error || "Nao foi possivel cancelar a assinatura no Mercado Pago.",
+                mercadoPago: data,
             };
         }
 
