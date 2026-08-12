@@ -293,6 +293,29 @@ const getAssinaturaMP = async (id) => {
     return await response.json();
 };
 
+const getPagamentoAutorizadoMP = async (id) => {
+    if (!MP_ACCESS_TOKEN) {
+        throw new Error("MP_ACCESS_TOKEN nao configurado");
+    }
+
+    const response = await fetch(
+        `https://api.mercadopago.com/authorized_payments/${id}`,
+        {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+                "Content-Type": "application/json"
+            }
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error("Erro ao consultar fatura da assinatura no Mercado Pago");
+    }
+
+    return await response.json();
+};
+
 const mpWebHook = async (req, res) => {
     try {
 
@@ -308,6 +331,33 @@ const mpWebHook = async (req, res) => {
             metadata: { type },
             req,
         });
+
+        if (type === "subscription_authorized_payment") {
+            const authorizedPayment = await getPagamentoAutorizadoMP(data.id);
+            const resultado = await AssinaturaModel.atualizarPagamentoAutorizado(authorizedPayment);
+
+            trackAssinaturaEvento({
+                evento: authorizedPayment?.payment?.status === "approved"
+                    ? "subscription_payment_approved"
+                    : "subscription_payment_not_approved",
+                source: "mercado_pago",
+                status: authorizedPayment?.payment?.status || authorizedPayment?.status,
+                casal: resultado?.assinatura?.casal,
+                assinaturaId: resultado?.assinatura?.id,
+                mpPreapprovalId: authorizedPayment?.preapproval_id,
+                metadata: {
+                    authorizedPaymentId: authorizedPayment?.id,
+                    authorizedPaymentStatus: authorizedPayment?.status,
+                    summarized: authorizedPayment?.summarized,
+                    paymentStatus: authorizedPayment?.payment?.status,
+                    paymentStatusDetail: authorizedPayment?.payment?.status_detail,
+                    retryAttempt: authorizedPayment?.retry_attempt,
+                },
+                req,
+            });
+
+            return res.sendStatus(200);
+        }
 
         if (type !== "subscription_preapproval") {
             return res.sendStatus(200);
