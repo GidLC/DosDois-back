@@ -175,6 +175,12 @@ const safeDeviceSessionId = (deviceSessionId) => {
     return normalized.length <= 255 ? normalized : null;
 };
 
+const normalizaEmail = (email) =>
+    String(email || "").trim().toLowerCase();
+
+const isEmailValido = (email) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 const connectionQuery = (connection, sql, params = []) =>
     new Promise((resolve, reject) => {
         connection.query(sql, params, (err, results) => {
@@ -415,6 +421,16 @@ class AssinaturaModel {
                 return callback("MP_ACCESS_TOKEN_NOT_CONFIGURED", null);
             }
 
+            const payerEmail = normalizaEmail(email);
+
+            if (!isEmailValido(payerEmail)) {
+                return callback({
+                    code: "EMAIL_PAGADOR_INVALIDO",
+                    status: 400,
+                    message: "Informe um e-mail valido para concluir a assinatura.",
+                }, null);
+            }
+
             const oferta = await this.getOfertaAtiva(planKey);
             const planFallback = MP_PLANS[planKey];
             const plan = {
@@ -446,7 +462,7 @@ class AssinaturaModel {
                     reason: "Assinatura DosDois",
                     external_reference: externalReference,
                     items,
-                    payer_email: email,
+                    payer_email: payerEmail,
                     preapproval_plan_id: plan.mpPlanId,
                     card_token_id: token,
                     status: "authorized"

@@ -51,6 +51,12 @@ const getCheckoutContext = (checkoutToken) => {
     }
 }
 
+const normalizaEmail = (email) =>
+    String(email || "").trim().toLowerCase();
+
+const isEmailValido = (email) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 const createCheckout = async (req, res) => {
     try {
         const { offerId, planKey } = req.body
@@ -172,6 +178,7 @@ const createCheckout = async (req, res) => {
 
 const createAssinatura = (req, res) => {
     const { email, token, checkoutToken, deviceSessionId } = req.body
+    const payerEmail = normalizaEmail(email);
 
     let checkout
 
@@ -202,6 +209,24 @@ const createAssinatura = (req, res) => {
         return res.status(401).json({ error: 'CHECKOUT_INVALIDO' })
     }
 
+    if (!isEmailValido(payerEmail)) {
+        trackAssinaturaEvento({
+            evento: "payment_failed",
+            source: "checkout",
+            status: "email_pagador_invalido",
+            offerId: checkout.offerId,
+            casal: checkout.cod_casal,
+            usuario: checkout.userId,
+            metadata: { emailInformado: Boolean(email) },
+            req,
+        });
+
+        return res.status(400).json({
+            error: 'EMAIL_PAGADOR_INVALIDO',
+            message: 'Informe um e-mail valido para concluir a assinatura.',
+        })
+    }
+
     trackAssinaturaEvento({
         evento: "payment_submit",
         source: "checkout",
@@ -209,11 +234,11 @@ const createAssinatura = (req, res) => {
         offerId: checkout.offerId,
         casal: checkout.cod_casal,
         usuario: checkout.userId,
-        metadata: { emailInformado: Boolean(email) },
+        metadata: { emailInformado: true },
         req,
     });
 
-    AssinaturaModel.createAssinatura(checkout.offerId, checkout.cod_casal, email, token, { deviceSessionId }, (err, results) => {
+    AssinaturaModel.createAssinatura(checkout.offerId, checkout.cod_casal, payerEmail, token, { deviceSessionId }, (err, results) => {
         if (err) {
             console.error('Erro ao registrar assinatura', err);
 
