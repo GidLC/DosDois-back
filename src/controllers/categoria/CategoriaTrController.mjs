@@ -72,10 +72,21 @@ const editCategoriaTr = (req, res) => {
 const deleteCategoriaTr = (req, res) => {
     const auth = req.header('auth');
     const id = req.header('id');
-    console.log(id)
-
     CategoriaTrModel.deleteCategoriaTr(auth, id, (err, results) => {
         if(err) {
+            if(err.sqlState == '23000' || err.errno == 1451) {
+                return res.status(409).json({
+                    error: 'CATEGORY_HAS_TRANSACTIONS',
+                    message: 'Essa categoria ja possui movimentacoes. Para excluir, atribua essas movimentacoes para outra categoria.',
+                    status: 409
+                })
+            }
+            if(err.code == 'CATEGORY_NOT_FOUND') {
+                return res.status(404).json({
+                    error: 'Categoria nao encontrada para exclusao',
+                    status: 404
+                })
+            }
             if(err.sqlState == 23000) {
                 return res.status(501).json({error: 'Essa categoria já possui movimentações, não é possível exclui-la', status: 501})
             }

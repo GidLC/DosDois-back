@@ -3,10 +3,10 @@ import BancoModel from "../../models/banco/bancoModel.mjs";
 
 const addBanco = (req, res) => {
 
-    const { saldo_inicial, nome, tipo} = req.body;
+    const { saldo_inicial, nome, tipo, padrao } = req.body;
     const casal = req.header('auth');
     const usuario = req.header('usuario')
-    BancoModel.addBanco(saldo_inicial, casal, nome, tipo, usuario, (err, results) => {
+    BancoModel.addBanco(saldo_inicial, casal, nome, tipo, usuario, padrao, (err, results) => {
         if (err) {
             console.error('Erro ao cadastrar banco', err);
             return res.status(500).json({ error: 'Erro ao cadastrar banco' });
@@ -36,9 +36,7 @@ const readBancoID = (req, res) => {
     const cod_casal = req.header('auth');
     const id = req.header("id");
 
-    console.log(id)
     BancoModel.readBancoID(cod_casal, id, (err, results) => {
-        console.log(results)
         if(err) {
             return res.status(500).json({error: 'Erro ao encontrar banco'});
         } else if(results == undefined) {

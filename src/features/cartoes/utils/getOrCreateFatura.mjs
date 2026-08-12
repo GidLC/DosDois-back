@@ -3,24 +3,22 @@ import { pool } from "../../../config/config.mjs";
 export const getOrCreateFatura = async (cartao_id, mes, ano) => {
     return new Promise((resolve, reject) => {
         const querySel = `
-            SELECT id, total, status 
-            FROM cartao_faturas 
+            SELECT id, total, status
+            FROM cartao_faturas
             WHERE cartao_id = ? AND mes = ? AND ano = ?
         `;
 
         pool.query(querySel, [cartao_id, mes, ano], (err, result) => {
             if (err) return reject(err);
 
-            //Se encontrou a fatura
             if (result.length > 0) {
-                //Se a fatura não estiver aberta
-                if (result[0].status != "aberta") {
-                    return reject(`Fatura já fechada`)
+                if (result[0].status === "paga") {
+                    return reject("Fatura ja paga");
                 }
+
                 return resolve(result[0]);
             }
 
-            // Criar fatura caso não exista
             const queryInsert = `
                 INSERT INTO cartao_faturas (cartao_id, mes, ano, total, status)
                 VALUES (?, ?, ?, 0, 'aberta')

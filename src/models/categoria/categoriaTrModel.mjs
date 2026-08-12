@@ -92,20 +92,29 @@ class CategoriaTrModel {
 
     //Só se utiliza esse delete caso a categoria não tenha movimentações atribuidas a ela
     static deleteCategoriaTr = async (auth, id, callback) => {
+        try {
         const query = 'DELETE FROM categoria_tr WHERE id = ? AND casal = ?';
-        const categoria = await new Promisse((resolve, reject) => {
+        const categoria = await new Promise((resolve, reject) => {
             pool.query(query, [id, auth], (err, results) => {
                 if (err) {
-                    return callback(err, null)
+                    reject(err)
+                    return
                 }
 
                 resolve(results)
             })
         })
 
+        if (!categoria?.affectedRows) {
+            return callback({ code: 'CATEGORY_NOT_FOUND' }, null)
+        }
+
         await decrementaUso(auth, "categorias")
 
         return callback(null, categoria)
+        } catch (error) {
+            return callback(error, null)
+        }
     }
 
 

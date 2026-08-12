@@ -3,11 +3,30 @@ import { decrementaUso } from "../../features/assinaturas/utils/decrementaUso.mj
 import { incrementaUso } from "../../features/assinaturas/utils/IncrementaUso.mjs";
 
 class BancoModel {
-    static addBanco = async (saldo_inicial, casal, nome, tipo, usuario, callback) => {
+    static limpaBancoPadrao = async (casal, tipo, usuario) => {
+        const tipoNormalizado = Number(tipo)
+        const query = tipoNormalizado === 0
+            ? 'UPDATE banco SET padrao = 0 WHERE casal = ? AND tipo = 0 AND usuario = ?'
+            : 'UPDATE banco SET padrao = 0 WHERE casal = ? AND tipo = 1'
+        const params = tipoNormalizado === 0 ? [casal, usuario] : [casal]
+
+        return new Promise((resolve, reject) => {
+            pool.query(query, params, (err, results) => {
+                if (err) reject(err)
+                resolve(results)
+            })
+        })
+    }
+
+    static addBanco = async (saldo_inicial, casal, nome, tipo, usuario, padrao, callback) => {
+        const padraoNormalizado = Number(padrao) === 1 || padrao === true ? 1 : 0
+
         if (tipo == 0) {
-            const query = 'INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario, arquivo) VALUES (?,?,?,?,?,0)';
+            if (padraoNormalizado) await BancoModel.limpaBancoPadrao(casal, tipo, usuario)
+
+            const query = 'INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario, arquivo, padrao) VALUES (?,?,?,?,?,0,?)';
             const banco = await new Promise((resolve, reject) => {
-                pool.query(query, [nome, tipo, saldo_inicial, casal, usuario], (err, results) => {
+                pool.query(query, [nome, tipo, saldo_inicial, casal, usuario, padraoNormalizado], (err, results) => {
                     if (err) {
                         return callback(err, null)
                     }
@@ -20,9 +39,11 @@ class BancoModel {
 
             return callback(null, banco)
         } else {
-            const query = 'INSERT INTO banco (nome, tipo, saldo_inicial, casal, arquivo) VALUES (?,?,?,?,0)';
+            if (padraoNormalizado) await BancoModel.limpaBancoPadrao(casal, tipo, usuario)
+
+            const query = 'INSERT INTO banco (nome, tipo, saldo_inicial, casal, arquivo, padrao) VALUES (?,?,?,?,0,?)';
             const banco = await new Promise((resolve, reject) => {
-                pool.query(query, [nome, tipo, saldo_inicial, casal], (err, results) => {
+                pool.query(query, [nome, tipo, saldo_inicial, casal, padraoNormalizado], (err, results) => {
                     if (err) {
                         return callback(err, null)
                     }
@@ -294,7 +315,6 @@ class BancoModel {
             if (Number(arquivo) == 1 ) {
                 await decrementaUso(casal, "bancos")
             } else { //Caso for desarquivar
-                console.log("incrementando")
                 await incrementaUso(casal, "bancos")
             }
 
@@ -308,22 +328,15 @@ class BancoModel {
     //Criar função para editar banco
     static editBanco = async (id, casal, nome, tipo, usuario, padrao, callback) => {
         try {
-            if (padrao) {
-                await new Promise((resolve, reject) => {
-                    const query = 'UPDATE banco SET padrao = 0 WHERE casal = ? AND tipo = ?'
-                    pool.query(query, [casal, tipo], (err, results) => {
-                        if (err) {
-                            reject(err)
-                        }
+            const padraoNormalizado = Number(padrao) === 1 || padrao === true ? 1 : 0
 
-                        resolve(results)
-                    })
-                })
+            if (padraoNormalizado) {
+                await BancoModel.limpaBancoPadrao(casal, tipo, usuario)
             }
 
             const results = await new Promise((resolve, reject) => {
                 const query = 'UPDATE banco SET nome = ?, tipo = ?, usuario = ?, padrao = ? WHERE id = ? AND casal = ?';
-                pool.query(query, [nome, tipo, usuario, padrao, id, casal], (err, results) => {
+                pool.query(query, [nome, tipo, usuario, padraoNormalizado, id, casal], (err, results) => {
                     if (err) {
                         reject(err)
                     }

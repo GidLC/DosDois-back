@@ -9,6 +9,6 @@ export const incrementaUso = async (casal, modulo, qtd = 1) => {
     await queryAsync(`
     INSERT INTO contador_uso (casal, modulo, uso)
     VALUES (?, ?, ?)
-    ON DUPLICATE KEY UPDATE uso = uso + 1
+    ON DUPLICATE KEY UPDATE uso = uso + VALUES(uso)
   `, [casal, module.id, qtd]);
 };
