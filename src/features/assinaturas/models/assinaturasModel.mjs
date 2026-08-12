@@ -326,6 +326,8 @@ class AssinaturaModel {
                 throw ASSINATURA_DUPLICADA;
             }
 
+            let assinaturaId = assinatura?.id;
+
             if (assinatura) {
                 await connectionQuery(
                     connection,
@@ -341,7 +343,7 @@ class AssinaturaModel {
                     [planId, assinatura.id],
                 );
             } else {
-                await connectionQuery(
+                const insertResult = await connectionQuery(
                     connection,
                     `
                         INSERT INTO assinaturas
@@ -350,9 +352,12 @@ class AssinaturaModel {
                     `,
                     [casal, planId],
                 );
+
+                assinaturaId = insertResult.insertId;
             }
 
             await commit(connection);
+            return assinaturaId;
         } catch (error) {
             await rollback(connection);
             throw error;
@@ -396,7 +401,8 @@ class AssinaturaModel {
                 return callback("INVALID_PLAN", null);
             }
 
-            await this.reservaAssinatura(casal, plan.id);
+            const assinaturaId = await this.reservaAssinatura(casal, plan.id);
+            const externalReference = `assinatura:${assinaturaId}`;
 
             const response = await fetch("https://api.mercadopago.com/preapproval", {
                 method: "POST",
@@ -406,7 +412,7 @@ class AssinaturaModel {
                 },
                 body: JSON.stringify({
                     reason: "Assinatura DosDois",
-                    external_reference: casal,
+                    external_reference: externalReference,
                     payer_email: email,
                     preapproval_plan_id: plan.mpPlanId,
                     card_token_id: token,
@@ -441,7 +447,11 @@ class AssinaturaModel {
 
             await this.atualizarStatusAssinatura(data.id, data.status, data, authorizedPayment);
 
-            return callback(null, data);
+            return callback(null, {
+                ...data,
+                assinatura_id: assinaturaId,
+                external_reference: externalReference,
+            });
         } catch (error) {
             console.error("Erro ao registrar assinatura:", error);
             return callback(error, null);
