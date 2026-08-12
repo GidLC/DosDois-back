@@ -11,9 +11,12 @@ const ASSINATURA_DUPLICADA = {
     message: "Este casal ja possui uma assinatura ativa ou em processamento.",
 };
 
-const statusMpToDb = (status) => {
+const isAuthorizedPaymentApproved = (authorizedPayment) =>
+    authorizedPayment?.payment?.status === "approved";
+
+const statusMpToDb = (status, { paymentApproved = false } = {}) => {
     const statusMap = {
-        authorized: "ativa",
+        authorized: paymentApproved ? "ativa" : "pendente",
         paused: "pausada",
         canceled: "cancelada",
         cancelled: "cancelada",
@@ -46,6 +49,28 @@ const fetchMercadoPagoPreapproval = async (mpPreapprovalId) => {
     return data;
 };
 
+const fetchLatestAuthorizedPaymentByPreapproval = async (mpPreapprovalId) => {
+    const params = new URLSearchParams({
+        preapproval_id: mpPreapprovalId,
+        limit: "1",
+        offset: "0",
+    });
+
+    const response = await fetch(`https://api.mercadopago.com/authorized_payments/search?${params.toString()}`, {
+        method: "GET",
+        headers: {
+            "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
+            "Content-Type": "application/json"
+        }
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) return null;
+
+    return data?.results?.[0] || null;
+};
+
 const updateMercadoPagoPreapprovalStatus = async (mpPreapprovalId, status) => {
     const response = await fetch(`https://api.mercadopago.com/preapproval/${mpPreapprovalId}`, {
         method: "PUT",
@@ -65,6 +90,65 @@ const isInvalidPreapprovalStatusParam = (data) =>
     String(data?.message || data?.error || "")
         .toLowerCase()
         .includes("invalid preapproval status param");
+
+const getPeriodFromMpFrequency = (autoRecurring = {}) => {
+    const frequency = Number(autoRecurring.frequency || 1);
+    const safeFrequency = Number.isFinite(frequency) && frequency > 0 ? frequency : 1;
+    const frequencyType = autoRecurring.frequency_type;
+
+    if (frequencyType === "months") {
+        return { unit: "months", amount: safeFrequency };
+    }
+
+    if (frequencyType === "years") {
+        return { unit: "years", amount: safeFrequency };
+    }
+
+    if (frequencyType === "days") {
+        return { unit: "days", amount: safeFrequency };
+    }
+
+    return { unit: "months", amount: 1 };
+};
+
+const getSubscriptionPeriod = async (assinatura = {}) => {
+    if (assinatura.preapproval_plan_id) {
+        const [oferta] = await queryAsync(`
+            SELECT periodicidade
+            FROM planos_ofertas
+            WHERE mp_plan_id = ?
+            ORDER BY ativo DESC, prioridade DESC, id DESC
+            LIMIT 1
+        `, [assinatura.preapproval_plan_id]);
+
+        if (oferta?.periodicidade === "anual") {
+            return { unit: "years", amount: 1 };
+        }
+
+        if (oferta?.periodicidade === "mensal") {
+            return { unit: "months", amount: 1 };
+        }
+    }
+
+    return getPeriodFromMpFrequency(assinatura.auto_recurring);
+};
+
+const addSubscriptionPeriod = (date, period) => {
+    const nextDate = new Date(date);
+
+    if (period.unit === "years") {
+        nextDate.setFullYear(nextDate.getFullYear() + period.amount);
+        return nextDate;
+    }
+
+    if (period.unit === "days") {
+        nextDate.setDate(nextDate.getDate() + period.amount);
+        return nextDate;
+    }
+
+    nextDate.setMonth(nextDate.getMonth() + period.amount);
+    return nextDate;
+};
 
 const connectionQuery = (connection, sql, params = []) =>
     new Promise((resolve, reject) => {
@@ -338,6 +422,12 @@ class AssinaturaModel {
                 return callback(data, null);
             }
 
+            const authorizedPayment = data?.id
+                ? await fetchLatestAuthorizedPaymentByPreapproval(data.id)
+                : null;
+            const paymentApproved = isAuthorizedPaymentApproved(authorizedPayment);
+            const localStatus = statusMpToDb(data.status, { paymentApproved });
+
             await queryAsync(`
                 UPDATE assinaturas
                 SET plano_id = ?,
@@ -347,9 +437,9 @@ class AssinaturaModel {
                     created_at = ?,
                     updated_at = ?
                 WHERE casal = ?`,
-                [plan.id, statusMpToDb(data.status), data.status, data.id, data.date_created, data.last_modified, casal])
+                [plan.id, localStatus, data.status, data.id, data.date_created, data.last_modified, casal])
 
-            await this.atualizarStatusAssinatura(data.id, data.status, data);
+            await this.atualizarStatusAssinatura(data.id, data.status, data, authorizedPayment);
 
             return callback(null, data);
         } catch (error) {
@@ -368,18 +458,16 @@ class AssinaturaModel {
         return rows;
     };
 
-    static atualizarStatusAssinatura = async (mpId, status, assinatura) => {
-        const statusDB = statusMpToDb(status)
+    static atualizarStatusAssinatura = async (mpId, status, assinatura, authorizedPayment = null) => {
+        const payment = authorizedPayment || await fetchLatestAuthorizedPaymentByPreapproval(mpId);
+        const statusDB = statusMpToDb(status, {
+            paymentApproved: isAuthorizedPaymentApproved(payment),
+        })
 
-        if (status == "authorized" && assinatura?.date_created && assinatura?.auto_recurring?.frequency_type) {
+        if (status == "authorized" && assinatura?.date_created) {
             const dataAssinatura = formataDataBr(assinatura.date_created)
-            let fimAssinatura = new Date(dataAssinatura)
-
-            if (assinatura.auto_recurring.frequency_type == "months") {
-                fimAssinatura.setMonth(fimAssinatura.getMonth() + 1)
-            } else {
-                fimAssinatura.setFullYear(fimAssinatura.getFullYear() + 1)
-            }
+            const period = await getSubscriptionPeriod(assinatura)
+            const fimAssinatura = addSubscriptionPeriod(dataAssinatura, period)
 
             const inicioSeparado = await separaData(dataAssinatura)
             const fimSeparado = await separaData(fimAssinatura.toISOString())
@@ -399,6 +487,27 @@ class AssinaturaModel {
     `, [statusDB, status, mpId]
         )
     };
+
+    static atualizarPagamentoAutorizado = async (authorizedPayment) => {
+        if (!authorizedPayment?.preapproval_id) return null;
+
+        const assinatura = await this.buscarAssinaturaPorMPId(authorizedPayment.preapproval_id);
+        if (!assinatura) return null;
+
+        const preapproval = await fetchMercadoPagoPreapproval(authorizedPayment.preapproval_id);
+        await this.atualizarStatusAssinatura(
+            authorizedPayment.preapproval_id,
+            preapproval.status,
+            preapproval,
+            authorizedPayment,
+        );
+
+        return {
+            assinatura,
+            preapproval,
+            paymentApproved: isAuthorizedPaymentApproved(authorizedPayment),
+        };
+    }
 
     static cancelarAssinatura = async (casal) => {
         if (!MP_ACCESS_TOKEN) {
