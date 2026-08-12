@@ -150,6 +150,24 @@ const addSubscriptionPeriod = (date, period) => {
     return nextDate;
 };
 
+const getPlanPeriodLabel = (periodicidade) =>
+    periodicidade === "anual" ? "anual" : "mensal";
+
+const buildMercadoPagoItems = (plan) => {
+    const periodLabel = getPlanPeriodLabel(plan.periodicidade);
+    const title = plan.nome || `DosDois Premium ${periodLabel}`;
+
+    return [
+        {
+            title,
+            description: `Assinatura ${periodLabel} do plano Premium do app DosDois para gestao financeira de casais.`,
+            quantity: 1,
+            unit_price: Number(plan.valor),
+            currency_id: "BRL",
+        },
+    ];
+};
+
 const connectionQuery = (connection, sql, params = []) =>
     new Promise((resolve, reject) => {
         connection.query(sql, params, (err, results) => {
@@ -393,6 +411,7 @@ class AssinaturaModel {
                 id: oferta?.plano_id || planFallback?.id,
                 mpPlanId: oferta?.mp_plan_id || oferta?.mpPlanId || planFallback?.mpPlanId,
                 codigo: oferta?.codigo || planFallback?.codigo,
+                nome: oferta?.nome_publico || planFallback?.nome,
                 valor: oferta?.valor || planFallback?.valor,
                 periodicidade: oferta?.periodicidade,
             };
@@ -403,6 +422,7 @@ class AssinaturaModel {
 
             const assinaturaId = await this.reservaAssinatura(casal, plan.id);
             const externalReference = `assinatura:${assinaturaId}`;
+            const items = buildMercadoPagoItems(plan);
 
             const response = await fetch("https://api.mercadopago.com/preapproval", {
                 method: "POST",
@@ -413,6 +433,7 @@ class AssinaturaModel {
                 body: JSON.stringify({
                     reason: "Assinatura DosDois",
                     external_reference: externalReference,
+                    items,
                     payer_email: email,
                     preapproval_plan_id: plan.mpPlanId,
                     card_token_id: token,
