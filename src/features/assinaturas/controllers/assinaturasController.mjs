@@ -392,6 +392,9 @@ const mpWebHook = async (req, res) => {
                 metadata: {
                     authorizedPaymentId: authorizedPayment?.id,
                     authorizedPaymentStatus: authorizedPayment?.status,
+                    paymentId: authorizedPayment?.payment?.id,
+                    paymentExternalReference: authorizedPayment?.payment?.external_reference,
+                    preapprovalExternalReference: resultado?.preapproval?.external_reference,
                     summarized: authorizedPayment?.summarized,
                     paymentStatus: authorizedPayment?.payment?.status,
                     paymentStatusDetail: authorizedPayment?.payment?.status_detail,

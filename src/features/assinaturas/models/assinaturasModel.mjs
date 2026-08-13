@@ -207,6 +207,9 @@ const isMercadoPagoInternalError = (data, status) =>
 const getMercadoPagoPlanEnvName = (offerCode) =>
     `MP_PLAN_ID_${String(offerCode || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_TEST`;
 
+const buildExternalReference = (assinaturaId) =>
+    `DD_ASSINATURA_${String(assinaturaId).replace(/[^0-9A-Za-z_-]/g, "")}`.slice(0, 150);
+
 const maskEmail = (email) => {
     const [name = "", domain = ""] = String(email || "").split("@");
     const visibleName = name.slice(0, 2);
@@ -505,7 +508,7 @@ class AssinaturaModel {
             }
 
             const assinaturaId = await this.reservaAssinatura(casal, plan.id);
-            const externalReference = `assinatura:${assinaturaId}`;
+            const externalReference = buildExternalReference(assinaturaId);
             const items = buildMercadoPagoItems(plan);
             const deviceSessionId = safeDeviceSessionId(options.deviceSessionId);
             const requestTraceId = randomUUID();
@@ -543,6 +546,7 @@ class AssinaturaModel {
             });
 
             const data = await response.json();
+            console.log(data)
 
             if (!response.ok) {
                 console.error("Erro Mercado Pago:", {
