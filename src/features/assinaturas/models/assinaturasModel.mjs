@@ -559,7 +559,7 @@ class AssinaturaModel {
                 },
                 body: JSON.stringify({
                     reason,
-                    external_reference: externalReference,
+                    external_reference: assinaturaId,
                     items,
                     payer_email: payerEmail,
                     preapproval_plan_id: plan.mpPlanId,
