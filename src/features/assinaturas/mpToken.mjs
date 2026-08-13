@@ -21,10 +21,15 @@ export const getMercadoPagoPlanIdOverride = (offerCode) => {
     if (!offerCode) return null;
 
     const normalizedCode = String(offerCode).trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
-    const suffix = IS_MP_TEST_ENV ? "TEST" : "PROD";
 
-    return process.env[`MP_PLAN_ID_${normalizedCode}_${suffix}`]
-        || process.env[`MP_PREAPPROVAL_PLAN_ID_${normalizedCode}_${suffix}`]
+    if (IS_MP_TEST_ENV) {
+        return process.env[`MP_PLAN_ID_${normalizedCode}_TEST`]
+            || process.env[`MP_PREAPPROVAL_PLAN_ID_${normalizedCode}_TEST`]
+            || null;
+    }
+
+    return process.env[`MP_PLAN_ID_${normalizedCode}_PROD`]
+        || process.env[`MP_PREAPPROVAL_PLAN_ID_${normalizedCode}_PROD`]
         || process.env[`MP_PLAN_ID_${normalizedCode}`]
         || null;
 };

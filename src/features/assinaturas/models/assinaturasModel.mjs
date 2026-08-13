@@ -187,6 +187,16 @@ const isMercadoPagoTemplateMissing = (data) =>
         .toLowerCase()
         .includes("template with id");
 
+const isPayerCollectorModeMismatch = (data) =>
+    String(data?.message || "")
+        .toLowerCase()
+        .includes("both payer and collector must be real or test users");
+
+const isCardTokenServiceNotFound = (data) =>
+    String(data?.message || "")
+        .toLowerCase()
+        .includes("card token service not found");
+
 const getMercadoPagoPlanEnvName = (offerCode) =>
     `MP_PLAN_ID_${String(offerCode || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_TEST`;
 
@@ -469,6 +479,17 @@ class AssinaturaModel {
                 return callback("INVALID_PLAN", null);
             }
 
+            if (MP_ENV === "test" && oferta?.mp_plan_id && plan.mpPlanId === oferta.mp_plan_id) {
+                return callback({
+                    code: "MP_TEST_PLAN_ID_MATCHES_PRODUCTION",
+                    status: 400,
+                    message: "O ID de plano configurado para teste esta igual ao mp_plan_id produtivo salvo no banco. Configure MP_PLAN_ID_*_TEST com um preapproval_plan criado no Mercado Pago de teste.",
+                    mercadoPagoEnv: MP_ENV,
+                    mpPlanId: plan.mpPlanId,
+                    offerCode: plan.codigo,
+                }, null);
+            }
+
             const assinaturaId = await this.reservaAssinatura(casal, plan.id);
             const externalReference = `assinatura:${assinaturaId}`;
             const items = buildMercadoPagoItems(plan);
@@ -503,6 +524,30 @@ class AssinaturaModel {
                         code: "MP_PREAPPROVAL_PLAN_NOT_FOUND",
                         status: 400,
                         message: "O plano de assinatura configurado nao existe no ambiente de teste do Mercado Pago. Verifique o MP_PLAN_ID_*_TEST e use um preapproval_plan criado com o mesmo vendedor das credenciais de teste.",
+                        mercadoPago: data,
+                        mercadoPagoEnv: MP_ENV,
+                        mpPlanId: plan.mpPlanId,
+                        offerCode: plan.codigo,
+                    }, null);
+                }
+
+                if (isPayerCollectorModeMismatch(data)) {
+                    return callback({
+                        code: "MP_PAYER_COLLECTOR_MODE_MISMATCH",
+                        status: 400,
+                        message: "No ambiente de teste do Mercado Pago, comprador e vendedor precisam ser ambos usuarios de teste. Confira se a Public Key do site, o Access Token do backend, o plano de assinatura e o e-mail/cartao do pagador pertencem ao mesmo ambiente de teste.",
+                        mercadoPago: data,
+                        mercadoPagoEnv: MP_ENV,
+                        mpPlanId: plan.mpPlanId,
+                        offerCode: plan.codigo,
+                    }, null);
+                }
+
+                if (isCardTokenServiceNotFound(data)) {
+                    return callback({
+                        code: "MP_CARD_TOKEN_ENV_MISMATCH",
+                        status: 400,
+                        message: "O token do cartao nao foi reconhecido pelo ambiente do Mercado Pago. Em teste, gere o card_token com a VITE_MP_PUBLIC_KEY de teste correspondente ao mesmo aplicativo/vendedor do MP_ACCESS_TOKEN_TEST e refaca o token antes de enviar a assinatura.",
                         mercadoPago: data,
                         mercadoPagoEnv: MP_ENV,
                         mpPlanId: plan.mpPlanId,
