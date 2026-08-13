@@ -154,14 +154,25 @@ const addSubscriptionPeriod = (date, period) => {
 const getPlanPeriodLabel = (periodicidade) =>
     periodicidade === "anual" ? "anual" : "mensal";
 
-const buildMercadoPagoItems = (plan) => {
+const buildPlanTitle = (plan) => {
     const periodLabel = getPlanPeriodLabel(plan.periodicidade);
-    const title = plan.nome || `DosDois Premium ${periodLabel}`;
+
+    return plan.nome || `DosDois Premium ${periodLabel}`;
+};
+
+const buildPlanDescription = (plan) => {
+    const periodLabel = getPlanPeriodLabel(plan.periodicidade);
+
+    return `Assinatura ${periodLabel} do plano Premium do app DosDois para gestao financeira de casais.`;
+};
+
+const buildMercadoPagoItems = (plan) => {
+    const title = buildPlanTitle(plan);
 
     return [
         {
             title,
-            description: `Assinatura ${periodLabel} do plano Premium do app DosDois para gestao financeira de casais.`,
+            description: buildPlanDescription(plan),
             quantity: 1,
             unit_price: Number(plan.valor),
             currency_id: "BRL",
@@ -457,6 +468,15 @@ class AssinaturaModel {
                 return callback("MP_ACCESS_TOKEN_NOT_CONFIGURED", null);
             }
 
+            if (!MP_WEBHOOK_URL) {
+                return callback({
+                    code: "MP_WEBHOOK_URL_NOT_CONFIGURED",
+                    status: 500,
+                    message: "Configure MP_WEBHOOK_URL para criar assinaturas com notificacoes Webhook do Mercado Pago.",
+                    mercadoPagoEnv: MP_ENV,
+                }, null);
+            }
+
             const payerEmail = normalizaEmail(email);
 
             if (!isEmailValido(payerEmail)) {
@@ -510,6 +530,8 @@ class AssinaturaModel {
             const assinaturaId = await this.reservaAssinatura(casal, plan.id);
             const externalReference = buildExternalReference(assinaturaId);
             const items = buildMercadoPagoItems(plan);
+            const reason = buildPlanTitle(plan);
+            const description = buildPlanDescription(plan);
             const deviceSessionId = safeDeviceSessionId(options.deviceSessionId);
             const requestTraceId = randomUUID();
             const requestSummary = {
@@ -518,6 +540,8 @@ class AssinaturaModel {
                 offerCode: plan.codigo,
                 mpPlanId: plan.mpPlanId,
                 externalReference,
+                itemTitle: reason,
+                hasItemDescription: Boolean(description),
                 payerEmail: maskEmail(payerEmail),
                 hasCardToken: Boolean(token),
                 hasDeviceSessionId: Boolean(deviceSessionId),
@@ -534,19 +558,18 @@ class AssinaturaModel {
                     ...(deviceSessionId ? { "X-meli-session-id": deviceSessionId } : {}),
                 },
                 body: JSON.stringify({
-                    reason: "Assinatura DosDois",
+                    reason,
                     external_reference: externalReference,
                     items,
                     payer_email: payerEmail,
                     preapproval_plan_id: plan.mpPlanId,
                     card_token_id: token,
-                    ...(MP_WEBHOOK_URL ? { notification_url: MP_WEBHOOK_URL } : {}),
+                    notification_url: MP_WEBHOOK_URL,
                     status: "authorized"
                 })
             });
 
             const data = await response.json();
-            console.log(data)
 
             if (!response.ok) {
                 console.error("Erro Mercado Pago:", {
@@ -607,6 +630,9 @@ class AssinaturaModel {
 
                 return callback({
                     ...data,
+                    items: {
+                        description: 'Assinatura do APP DosDois'
+                    },
                     mercadoPagoEnv: MP_ENV,
                     mpPlanId: plan.mpPlanId,
                     offerCode: plan.codigo,
