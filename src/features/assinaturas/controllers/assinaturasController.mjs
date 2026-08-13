@@ -2,7 +2,7 @@ import AssinaturaModel from "../models/assinaturasModel.mjs";
 import AssinaturaEventosModel from "../models/assinaturaEventosModel.mjs";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../../../data/apiConfig.mjs";
-import { MP_ACCESS_TOKEN } from "../mpToken.mjs";
+import { MP_ACCESS_TOKEN, MP_ENV } from "../mpToken.mjs";
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
 
 const getCodCasalFromAuth = async (auth) => {
@@ -283,6 +283,7 @@ const createAssinatura = (req, res) => {
             metadata: {
                 initPoint: Boolean(results?.init_point),
                 externalReference: results?.external_reference,
+                mercadoPagoEnv: results?.mp_environment || MP_ENV,
             },
             req,
         });
@@ -293,6 +294,7 @@ const createAssinatura = (req, res) => {
             status: results?.status,
             assinaturaId: results?.assinatura_id,
             mpPreapprovalId: results?.id,
+            mercadoPagoEnv: results?.mp_environment || MP_ENV,
             init_point: results?.init_point,
         });
     })

@@ -2,7 +2,7 @@ import { formataDataBr } from "../../../data/formataDataBR/formataDataBR.mjs";
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
 import { pool } from "../../../config/config.mjs";
 import separaData from "../../../data/SeparaData/SeparaData.mjs";
-import { MP_ACCESS_TOKEN } from "../mpToken.mjs";
+import { MP_ACCESS_TOKEN, MP_ENV, getMercadoPagoPlanIdOverride } from "../mpToken.mjs";
 import { MP_PLANS } from "../utils/MP_PLANS.mjs";
 
 const ASSINATURA_DUPLICADA = {
@@ -433,13 +433,14 @@ class AssinaturaModel {
 
             const oferta = await this.getOfertaAtiva(planKey);
             const planFallback = MP_PLANS[planKey];
+            const planCode = oferta?.codigo || planKey || planFallback?.codigo;
             const plan = {
                 id: oferta?.plano_id || planFallback?.id,
-                mpPlanId: oferta?.mp_plan_id || oferta?.mpPlanId || planFallback?.mpPlanId,
-                codigo: oferta?.codigo || planFallback?.codigo,
+                mpPlanId: getMercadoPagoPlanIdOverride(planCode) || oferta?.mp_plan_id || oferta?.mpPlanId || planFallback?.mpPlanId,
+                codigo: planCode,
                 nome: oferta?.nome_publico || planFallback?.nome,
                 valor: oferta?.valor || planFallback?.valor,
-                periodicidade: oferta?.periodicidade,
+                periodicidade: oferta?.periodicidade || planFallback?.periodicidade,
             };
 
             if (!plan.id || !plan.mpPlanId) {
@@ -500,6 +501,7 @@ class AssinaturaModel {
                 ...data,
                 assinatura_id: assinaturaId,
                 external_reference: externalReference,
+                mp_environment: MP_ENV,
             });
         } catch (error) {
             console.error("Erro ao registrar assinatura:", error);
