@@ -2,7 +2,7 @@ import { formataDataBr } from "../../../data/formataDataBR/formataDataBR.mjs";
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
 import { pool } from "../../../config/config.mjs";
 import separaData from "../../../data/SeparaData/SeparaData.mjs";
-import { MP_ACCESS_TOKEN, MP_ENV, MP_TEST_PAYER_EMAIL_DOMAIN, MP_WEBHOOK_URL, getMercadoPagoPlanIdOverride } from "../mpToken.mjs";
+import { MP_ACCESS_TOKEN, MP_ENV, MP_WEBHOOK_URL, getMercadoPagoPlanIdOverride } from "../mpToken.mjs";
 import { MP_PLANS } from "../utils/MP_PLANS.mjs";
 import { randomUUID } from "crypto";
 
@@ -206,9 +206,6 @@ const isMercadoPagoInternalError = (data, status) =>
 
 const getMercadoPagoPlanEnvName = (offerCode) =>
     `MP_PLAN_ID_${String(offerCode || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_TEST`;
-
-const isMercadoPagoTestPayerEmail = (email) =>
-    String(email || "").trim().toLowerCase().endsWith(`@${MP_TEST_PAYER_EMAIL_DOMAIN}`);
 
 const maskEmail = (email) => {
     const [name = "", domain = ""] = String(email || "").split("@");
@@ -464,15 +461,6 @@ class AssinaturaModel {
                     code: "EMAIL_PAGADOR_INVALIDO",
                     status: 400,
                     message: "Informe um e-mail valido para concluir a assinatura.",
-                }, null);
-            }
-
-            if (MP_ENV === "test" && !isMercadoPagoTestPayerEmail(payerEmail)) {
-                return callback({
-                    code: "MP_TEST_PAYER_EMAIL_REQUIRED",
-                    status: 400,
-                    message: `No ambiente de teste do Mercado Pago, use o e-mail de uma conta compradora de teste (${MP_TEST_PAYER_EMAIL_DOMAIN}) no campo de e-mail do checkout.`,
-                    mercadoPagoEnv: MP_ENV,
                 }, null);
             }
 
