@@ -95,6 +95,25 @@ const attachPendingSubscription = async (auth, plan) => {
 
     if (!assinaturaPendente) return plan;
 
+    const [ultimoPagamento] = await queryAsync(`
+    SELECT status, metadata_json
+    FROM assinatura_eventos_conversao
+    WHERE mp_preapproval_id = ?
+      AND evento IN ('subscription_payment_approved', 'subscription_payment_not_approved')
+    ORDER BY id DESC
+    LIMIT 1
+  `, [assinaturaPendente.mp_preapproval_id]);
+
+    let paymentMetadata = {};
+
+    if (ultimoPagamento?.metadata_json) {
+        try {
+            paymentMetadata = JSON.parse(ultimoPagamento.metadata_json);
+        } catch {
+            paymentMetadata = {};
+        }
+    }
+
     return {
         ...plan,
         assinatura_pendente: true,
@@ -102,6 +121,8 @@ const attachPendingSubscription = async (auth, plan) => {
         assinatura_status: assinaturaPendente.assinatura_status,
         assinatura_mp_status: assinaturaPendente.mp_status,
         assinatura_mp_preapproval_id: assinaturaPendente.mp_preapproval_id,
+        assinatura_payment_status: paymentMetadata?.paymentStatus || ultimoPagamento?.status || null,
+        assinatura_payment_status_detail: paymentMetadata?.paymentStatusDetail || null,
         assinatura_inicio: assinaturaPendente.inicio,
         assinatura_fim: assinaturaPendente.fim,
         assinatura_plano_nome: assinaturaPendente.assinatura_plano_nome,
