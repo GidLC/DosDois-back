@@ -352,6 +352,14 @@ const getPagamentoAutorizadoMP = async (id) => {
     return await response.json();
 };
 
+const mpWebHookHealth = (req, res) => {
+    return res.status(200).json({
+        ok: true,
+        message: "Webhook Mercado Pago ativo",
+        mercadoPagoEnv: MP_ENV,
+    });
+};
+
 const mpWebHook = async (req, res) => {
     try {
 
@@ -574,4 +582,4 @@ const registrarEventoConversao = async (req, res) => {
     });
 }
 
-export default { createCheckout, createAssinatura, mpWebHook, getOfertas, cancelarAssinatura, registrarEventoConversao }
+export default { createCheckout, createAssinatura, mpWebHook, mpWebHookHealth, getOfertas, cancelarAssinatura, registrarEventoConversao }

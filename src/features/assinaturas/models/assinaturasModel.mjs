@@ -2,7 +2,7 @@ import { formataDataBr } from "../../../data/formataDataBR/formataDataBR.mjs";
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
 import { pool } from "../../../config/config.mjs";
 import separaData from "../../../data/SeparaData/SeparaData.mjs";
-import { MP_ACCESS_TOKEN, MP_ENV, MP_TEST_PAYER_EMAIL_DOMAIN, getMercadoPagoPlanIdOverride } from "../mpToken.mjs";
+import { MP_ACCESS_TOKEN, MP_ENV, MP_TEST_PAYER_EMAIL_DOMAIN, MP_WEBHOOK_URL, getMercadoPagoPlanIdOverride } from "../mpToken.mjs";
 import { MP_PLANS } from "../utils/MP_PLANS.mjs";
 import { randomUUID } from "crypto";
 
@@ -530,6 +530,7 @@ class AssinaturaModel {
                 payerEmail: maskEmail(payerEmail),
                 hasCardToken: Boolean(token),
                 hasDeviceSessionId: Boolean(deviceSessionId),
+                hasNotificationUrl: Boolean(MP_WEBHOOK_URL),
             };
 
             console.info("Criando assinatura Mercado Pago", requestSummary);
@@ -548,6 +549,7 @@ class AssinaturaModel {
                     payer_email: payerEmail,
                     preapproval_plan_id: plan.mpPlanId,
                     card_token_id: token,
+                    ...(MP_WEBHOOK_URL ? { notification_url: MP_WEBHOOK_URL } : {}),
                     status: "authorized"
                 })
             });

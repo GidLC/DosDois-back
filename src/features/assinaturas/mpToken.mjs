@@ -43,3 +43,6 @@ export const MP_TEST_PAYER_EMAIL_DOMAIN = String(process.env.MP_TEST_PAYER_EMAIL
     .trim()
     .toLowerCase()
     .replace(/^@/, "");
+
+export const MP_WEBHOOK_URL = String(process.env.MP_WEBHOOK_URL || process.env.MERCADO_PAGO_WEBHOOK_URL || "")
+    .trim();
