@@ -261,6 +261,10 @@ const createAssinatura = (req, res) => {
                 metadata: {
                     mercadoPagoCause,
                     httpStatus: status,
+                    mercadoPagoEnv: err?.mercadoPagoEnv,
+                    mpPlanId: err?.mpPlanId,
+                    offerCode: err?.offerCode,
+                    requestTraceId: err?.requestTraceId,
                 },
                 req,
             });
@@ -268,6 +272,8 @@ const createAssinatura = (req, res) => {
             return res.status(status).json({
                 error: errorCode,
                 message,
+                mercadoPagoEnv: err?.mercadoPagoEnv,
+                requestTraceId: err?.requestTraceId,
             });
         }
 

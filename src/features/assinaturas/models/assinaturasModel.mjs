@@ -2,8 +2,9 @@ import { formataDataBr } from "../../../data/formataDataBR/formataDataBR.mjs";
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
 import { pool } from "../../../config/config.mjs";
 import separaData from "../../../data/SeparaData/SeparaData.mjs";
-import { MP_ACCESS_TOKEN, MP_ENV, getMercadoPagoPlanIdOverride } from "../mpToken.mjs";
+import { MP_ACCESS_TOKEN, MP_ENV, MP_TEST_PAYER_EMAIL_DOMAIN, getMercadoPagoPlanIdOverride } from "../mpToken.mjs";
 import { MP_PLANS } from "../utils/MP_PLANS.mjs";
+import { randomUUID } from "crypto";
 
 const ASSINATURA_DUPLICADA = {
     code: "ASSINATURA_JA_EXISTE",
@@ -197,8 +198,24 @@ const isCardTokenServiceNotFound = (data) =>
         .toLowerCase()
         .includes("card token service not found");
 
+const isMercadoPagoInternalError = (data, status) =>
+    Number(status || data?.status) >= 500
+    || String(data?.message || "")
+        .toLowerCase()
+        .includes("internal server error");
+
 const getMercadoPagoPlanEnvName = (offerCode) =>
     `MP_PLAN_ID_${String(offerCode || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_TEST`;
+
+const isMercadoPagoTestPayerEmail = (email) =>
+    String(email || "").trim().toLowerCase().endsWith(`@${MP_TEST_PAYER_EMAIL_DOMAIN}`);
+
+const maskEmail = (email) => {
+    const [name = "", domain = ""] = String(email || "").split("@");
+    const visibleName = name.slice(0, 2);
+
+    return domain ? `${visibleName}***@${domain}` : "";
+};
 
 const connectionQuery = (connection, sql, params = []) =>
     new Promise((resolve, reject) => {
@@ -423,7 +440,7 @@ class AssinaturaModel {
     static marcaFalhaCriacao = async (casal) => {
         await queryAsync(`
             UPDATE assinaturas
-            SET status = 'pendente',
+            SET status = 'cancelada',
                 mp_status = 'creation_failed',
                 updated_at = NOW()
             WHERE casal = ?
@@ -447,6 +464,15 @@ class AssinaturaModel {
                     code: "EMAIL_PAGADOR_INVALIDO",
                     status: 400,
                     message: "Informe um e-mail valido para concluir a assinatura.",
+                }, null);
+            }
+
+            if (MP_ENV === "test" && !isMercadoPagoTestPayerEmail(payerEmail)) {
+                return callback({
+                    code: "MP_TEST_PAYER_EMAIL_REQUIRED",
+                    status: 400,
+                    message: `No ambiente de teste do Mercado Pago, use o e-mail de uma conta compradora de teste (${MP_TEST_PAYER_EMAIL_DOMAIN}) no campo de e-mail do checkout.`,
+                    mercadoPagoEnv: MP_ENV,
                 }, null);
             }
 
@@ -494,6 +520,19 @@ class AssinaturaModel {
             const externalReference = `assinatura:${assinaturaId}`;
             const items = buildMercadoPagoItems(plan);
             const deviceSessionId = safeDeviceSessionId(options.deviceSessionId);
+            const requestTraceId = randomUUID();
+            const requestSummary = {
+                requestTraceId,
+                mercadoPagoEnv: MP_ENV,
+                offerCode: plan.codigo,
+                mpPlanId: plan.mpPlanId,
+                externalReference,
+                payerEmail: maskEmail(payerEmail),
+                hasCardToken: Boolean(token),
+                hasDeviceSessionId: Boolean(deviceSessionId),
+            };
+
+            console.info("Criando assinatura Mercado Pago", requestSummary);
 
             const response = await fetch("https://api.mercadopago.com/preapproval", {
                 method: "POST",
@@ -516,7 +555,11 @@ class AssinaturaModel {
             const data = await response.json();
 
             if (!response.ok) {
-                console.error("Erro Mercado Pago:", data);
+                console.error("Erro Mercado Pago:", {
+                    ...requestSummary,
+                    httpStatus: response.status,
+                    mercadoPago: data,
+                });
                 await this.marcaFalhaCriacao(casal);
 
                 if (isMercadoPagoTemplateMissing(data)) {
@@ -555,11 +598,25 @@ class AssinaturaModel {
                     }, null);
                 }
 
+                if (isMercadoPagoInternalError(data, response.status)) {
+                    return callback({
+                        code: "MP_INTERNAL_ERROR",
+                        status: 502,
+                        message: "O Mercado Pago retornou erro interno ao criar a assinatura. A tentativa local foi liberada para nova tentativa; gere um novo token de cartao e tente novamente. Se persistir, use o requestTraceId dos logs para acionar o suporte do Mercado Pago.",
+                        mercadoPago: data,
+                        mercadoPagoEnv: MP_ENV,
+                        mpPlanId: plan.mpPlanId,
+                        offerCode: plan.codigo,
+                        requestTraceId,
+                    }, null);
+                }
+
                 return callback({
                     ...data,
                     mercadoPagoEnv: MP_ENV,
                     mpPlanId: plan.mpPlanId,
                     offerCode: plan.codigo,
+                    requestTraceId,
                 }, null);
             }
 
