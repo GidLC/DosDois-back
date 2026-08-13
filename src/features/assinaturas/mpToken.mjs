@@ -38,3 +38,8 @@ export const getMercadoPagoCredentialMode = () => ({
     env: MP_ENV,
     hasAccessToken: Boolean(MP_ACCESS_TOKEN),
 });
+
+export const MP_TEST_PAYER_EMAIL_DOMAIN = String(process.env.MP_TEST_PAYER_EMAIL_DOMAIN || "testuser.com")
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, "");
