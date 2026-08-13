@@ -181,6 +181,15 @@ const normalizaEmail = (email) =>
 const isEmailValido = (email) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+const isMercadoPagoTemplateMissing = (data) =>
+    data?.status === 404
+    && String(data?.message || "")
+        .toLowerCase()
+        .includes("template with id");
+
+const getMercadoPagoPlanEnvName = (offerCode) =>
+    `MP_PLAN_ID_${String(offerCode || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_TEST`;
+
 const connectionQuery = (connection, sql, params = []) =>
     new Promise((resolve, reject) => {
         connection.query(sql, params, (err, results) => {
@@ -404,8 +413,8 @@ class AssinaturaModel {
     static marcaFalhaCriacao = async (casal) => {
         await queryAsync(`
             UPDATE assinaturas
-            SET status = 'erro',
-                mp_status = 'erro',
+            SET status = 'pendente',
+                mp_status = 'creation_failed',
                 updated_at = NOW()
             WHERE casal = ?
               AND status = 'criando'
@@ -434,9 +443,22 @@ class AssinaturaModel {
             const oferta = await this.getOfertaAtiva(planKey);
             const planFallback = MP_PLANS[planKey];
             const planCode = oferta?.codigo || planKey || planFallback?.codigo;
+            const mpPlanOverride = getMercadoPagoPlanIdOverride(planCode);
+
+            if (MP_ENV === "test" && !mpPlanOverride) {
+                const envName = getMercadoPagoPlanEnvName(planCode);
+
+                return callback({
+                    code: "MP_TEST_PLAN_ID_NOT_CONFIGURED",
+                    status: 400,
+                    message: `Configure ${envName} com o ID do plano de assinatura criado no Mercado Pago de teste.`,
+                    mercadoPagoEnv: MP_ENV,
+                }, null);
+            }
+
             const plan = {
                 id: oferta?.plano_id || planFallback?.id,
-                mpPlanId: getMercadoPagoPlanIdOverride(planCode) || oferta?.mp_plan_id || oferta?.mpPlanId || planFallback?.mpPlanId,
+                mpPlanId: mpPlanOverride || oferta?.mp_plan_id || oferta?.mpPlanId || planFallback?.mpPlanId,
                 codigo: planCode,
                 nome: oferta?.nome_publico || planFallback?.nome,
                 valor: oferta?.valor || planFallback?.valor,
@@ -475,7 +497,25 @@ class AssinaturaModel {
             if (!response.ok) {
                 console.error("Erro Mercado Pago:", data);
                 await this.marcaFalhaCriacao(casal);
-                return callback(data, null);
+
+                if (isMercadoPagoTemplateMissing(data)) {
+                    return callback({
+                        code: "MP_PREAPPROVAL_PLAN_NOT_FOUND",
+                        status: 400,
+                        message: "O plano de assinatura configurado nao existe no ambiente de teste do Mercado Pago. Verifique o MP_PLAN_ID_*_TEST e use um preapproval_plan criado com o mesmo vendedor das credenciais de teste.",
+                        mercadoPago: data,
+                        mercadoPagoEnv: MP_ENV,
+                        mpPlanId: plan.mpPlanId,
+                        offerCode: plan.codigo,
+                    }, null);
+                }
+
+                return callback({
+                    ...data,
+                    mercadoPagoEnv: MP_ENV,
+                    mpPlanId: plan.mpPlanId,
+                    offerCode: plan.codigo,
+                }, null);
             }
 
             const authorizedPayment = data?.id
@@ -592,7 +632,7 @@ class AssinaturaModel {
         if (!assinatura.mp_preapproval_id) {
             await queryAsync(`
                 UPDATE assinaturas
-                SET status = 'erro',
+                SET status = 'cancelada',
                     mp_status = 'cancel_local_sem_mp',
                     updated_at = NOW()
                 WHERE id = ?
@@ -600,7 +640,7 @@ class AssinaturaModel {
 
             return {
                 id: assinatura.id,
-                status: "erro",
+                status: "cancelada",
                 mp_status: "cancel_local_sem_mp",
             };
         }
@@ -636,7 +676,7 @@ class AssinaturaModel {
             if (statusAtualMP === "pending") {
                 await queryAsync(`
                     UPDATE assinaturas
-                    SET status = 'erro',
+                    SET status = 'pendente',
                         mp_status = ?,
                         updated_at = NOW()
                     WHERE id = ?
@@ -644,7 +684,7 @@ class AssinaturaModel {
 
                 return {
                     id: assinatura.id,
-                    status: "erro",
+                    status: "pendente",
                     mp_status: statusAtualMP,
                     warning: "preapproval_pending_not_canceled",
                 };
