@@ -6,6 +6,7 @@ import { autenticarJWT } from '../../../middlewares/auth.mjs'
 assinaturasRouter.post('/createCheckout', autenticarJWT, assinaturasController.createCheckout)
 assinaturasRouter.post('/cancelar', autenticarJWT, assinaturasController.cancelarAssinatura)
 assinaturasRouter.post('/createSub', assinaturasController.createAssinatura)
+assinaturasRouter.get('/mpWebHook', assinaturasController.mpWebHookHealth)
 assinaturasRouter.post('/mpWebHook', assinaturasController.mpWebHook)
 assinaturasRouter.post('/eventos', assinaturasController.registrarEventoConversao)
 assinaturasRouter.get('/ofertas', assinaturasController.getOfertas)
