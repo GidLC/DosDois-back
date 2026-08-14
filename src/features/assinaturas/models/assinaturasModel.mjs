@@ -298,6 +298,13 @@ const buildExternalReference = (referenceId, prefix = "DD_ASSINATURA") => {
     return `${safePrefix}_${safeReferenceId}`.slice(0, 150);
 };
 
+const getAssinaturaIdFromAsaasExternalReference = (externalReference) => {
+    const match = String(externalReference || "").match(/^DD_ASAAS_ASSINATURA_(\d+)$/);
+    const assinaturaId = Number(match?.[1]);
+
+    return Number.isInteger(assinaturaId) && assinaturaId > 0 ? assinaturaId : null;
+};
+
 const maskEmail = (email) => {
     const [name = "", domain = ""] = String(email || "").split("@");
     const visibleName = name.slice(0, 2);
@@ -1026,19 +1033,46 @@ class AssinaturaModel {
         return assinatura;
     };
 
-    static buscarUnicaAssinaturaAsaasPendenteSemSubscription = async () => {
+    static buscarAssinaturaAsaasPorId = async (assinaturaId) => {
+        if (!assinaturaId) return null;
+
+        const [assinatura] = await queryAsync(`
+            SELECT *
+            FROM assinaturas
+            WHERE id = ?
+              AND billing_provider = 'asaas'
+            LIMIT 1
+        `, [assinaturaId]);
+
+        return assinatura;
+    };
+
+    static buscarAssinaturaAsaasPorReferenciaInterna = async (externalReference) => {
+        const assinaturaPorReferencia = await this.buscarAssinaturaPorProviderExternalReference("asaas", externalReference);
+        if (assinaturaPorReferencia) return assinaturaPorReferencia;
+
+        return this.buscarAssinaturaAsaasPorId(getAssinaturaIdFromAsaasExternalReference(externalReference));
+    };
+
+    static buscarAssinaturaAsaasPendenteRecenteSemSubscription = async () => {
         const assinaturas = await queryAsync(`
             SELECT *
             FROM assinaturas
             WHERE billing_provider = 'asaas'
               AND status IN ('pendente', 'criando')
               AND provider_subscription_id IS NULL
-              AND updated_at >= DATE_SUB(NOW(), INTERVAL 6 HOUR)
+              AND provider_checkout_id IS NOT NULL
+              AND provider_external_reference LIKE 'DD_ASAAS_ASSINATURA_%'
+              AND updated_at >= DATE_SUB(NOW(), INTERVAL 20 MINUTE)
             ORDER BY id DESC
             LIMIT 2
         `);
 
-        return assinaturas.length === 1 ? assinaturas[0] : null;
+        return {
+            assinatura: assinaturas[0] || null,
+            ambiguous: assinaturas.length > 1,
+            candidates: assinaturas.length,
+        };
     };
 
     static atualizarStatusAssinatura = async (mpId, status, assinatura, authorizedPayment = null) => {
@@ -1101,9 +1135,10 @@ class AssinaturaModel {
             ...subscription,
         };
         const externalReference = subscriptionAtual.externalReference || subscriptionAtual.external_reference;
+        const fallbackRecente = await this.buscarAssinaturaAsaasPendenteRecenteSemSubscription();
         const assinatura = await this.buscarAssinaturaPorProviderSubscriptionId("asaas", subscription.id)
-            || await this.buscarAssinaturaPorProviderExternalReference("asaas", externalReference)
-            || await this.buscarUnicaAssinaturaAsaasPendenteSemSubscription();
+            || await this.buscarAssinaturaAsaasPorReferenciaInterna(externalReference)
+            || fallbackRecente.assinatura;
         if (!assinatura) return null;
 
         const statusDB = statusAsaasSubscriptionToDb(subscriptionAtual.status);
@@ -1123,6 +1158,14 @@ class AssinaturaModel {
             assinatura,
             subscription: subscriptionAtual,
             statusDB,
+            matchStrategy: assinatura.provider_subscription_id === subscription.id
+                ? "provider_subscription_id"
+                : externalReference
+                    ? "external_reference"
+                    : fallbackRecente.ambiguous
+                        ? "latest_pending_recent_ambiguous"
+                        : "latest_pending_recent",
+            ambiguousFallback: fallbackRecente.ambiguous,
         };
     };
 
@@ -1137,12 +1180,13 @@ class AssinaturaModel {
             || subscription?.external_reference;
         if (!subscriptionId && !externalReference) return null;
 
+        const fallbackRecente = await this.buscarAssinaturaAsaasPendenteRecenteSemSubscription();
         const assinatura = (
             subscriptionId
                 ? await this.buscarAssinaturaPorProviderSubscriptionId("asaas", subscriptionId)
                 : null
-        ) || await this.buscarAssinaturaPorProviderExternalReference("asaas", externalReference)
-            || await this.buscarUnicaAssinaturaAsaasPendenteSemSubscription();
+        ) || await this.buscarAssinaturaAsaasPorReferenciaInterna(externalReference)
+            || fallbackRecente.assinatura;
         if (!assinatura) return null;
 
         const statusDB = statusAsaasPaymentToDb(payment.status);
@@ -1191,6 +1235,14 @@ class AssinaturaModel {
             assinatura,
             subscription,
             statusDB,
+            matchStrategy: assinatura.provider_subscription_id === subscriptionId
+                ? "provider_subscription_id"
+                : externalReference
+                    ? "external_reference"
+                    : fallbackRecente.ambiguous
+                        ? "latest_pending_recent_ambiguous"
+                        : "latest_pending_recent",
+            ambiguousFallback: fallbackRecente.ambiguous,
         };
     };
 

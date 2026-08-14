@@ -835,6 +835,17 @@ const asaasWebHook = async (req, res) => {
         if (event?.startsWith?.("PAYMENT_") && payment?.id) {
             const resultado = await AssinaturaModel.atualizarPagamentoAsaas(payment);
 
+            if (!resultado?.assinatura) {
+                console.warn("Webhook Asaas sem assinatura local vinculada", {
+                    event,
+                    eventId,
+                    paymentId: payment.id,
+                    subscriptionId: payment.subscription,
+                    paymentExternalReference: payment.externalReference || payment.external_reference,
+                    asaasEnv: ASAAS_ENV,
+                });
+            }
+
             trackAssinaturaEvento({
                 evento: ["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"].includes(event)
                     ? "subscription_payment_approved"
@@ -849,6 +860,8 @@ const asaasWebHook = async (req, res) => {
                     subscriptionId: payment.subscription,
                     paymentStatus: payment.status,
                     localStatus: resultado?.statusDB,
+                    matchStrategy: resultado?.matchStrategy,
+                    ambiguousFallback: resultado?.ambiguousFallback,
                     asaasEnv: ASAAS_ENV,
                 },
                 req,
@@ -859,6 +872,16 @@ const asaasWebHook = async (req, res) => {
 
         if (event?.startsWith?.("SUBSCRIPTION_") && subscription?.id) {
             const resultado = await AssinaturaModel.atualizarAssinaturaAsaas(subscription);
+
+            if (!resultado?.assinatura) {
+                console.warn("Webhook Asaas sem assinatura local vinculada", {
+                    event,
+                    eventId,
+                    subscriptionId: subscription.id,
+                    subscriptionExternalReference: subscription.externalReference || subscription.external_reference,
+                    asaasEnv: ASAAS_ENV,
+                });
+            }
 
             trackAssinaturaEvento({
                 evento: "subscription_status_updated",
@@ -871,6 +894,8 @@ const asaasWebHook = async (req, res) => {
                     subscriptionId: subscription.id,
                     subscriptionStatus: subscription.status,
                     localStatus: resultado?.statusDB,
+                    matchStrategy: resultado?.matchStrategy,
+                    ambiguousFallback: resultado?.ambiguousFallback,
                     asaasEnv: ASAAS_ENV,
                 },
                 req,
