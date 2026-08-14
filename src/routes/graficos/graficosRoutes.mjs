@@ -10,14 +10,18 @@ const bloquearGraficosFree = (req, res, next) => {
     const codigoPlano = String(req.plano?.codigo || '').toLowerCase()
 
     if (codigoPlano === 'free') {
-        return res.status(200).json({ error: 'MODULE_NOT_ALLOWED', module: 'graficos' })
+        return res.status(200).json({
+            error: 'MODULE_NOT_ALLOWED',
+            module: 'graficos',
+            message: 'No plano Free voce pode acompanhar despesas por categoria. Os demais graficos sao exclusivos para assinantes.'
+        })
     }
 
     next()
 }
 
 graficosRouter.get('/receitaPorCategoria', loadPlan, bloquearGraficosFree, graficosControllers.receitaPorCategoria)
-graficosRouter.get('/despesaPorCategoria', loadPlan, bloquearGraficosFree, graficosControllers.despesaPorCategoria)
+graficosRouter.get('/despesaPorCategoria', loadPlan, graficosControllers.despesaPorCategoria)
 graficosRouter.get('/despesaPorTag', loadPlan, bloquearGraficosFree, graficosControllers.despesaPorTag)
 
 export default graficosRouter
