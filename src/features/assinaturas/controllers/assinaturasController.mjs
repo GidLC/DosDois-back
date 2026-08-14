@@ -844,6 +844,18 @@ const asaasWebHook = async (req, res) => {
                     paymentExternalReference: payment.externalReference || payment.external_reference,
                     asaasEnv: ASAAS_ENV,
                 });
+            } else {
+                console.info("Webhook Asaas vinculado a assinatura local", {
+                    event,
+                    eventId,
+                    assinaturaId: resultado.assinatura.id,
+                    paymentId: payment.id,
+                    subscriptionId: payment.subscription,
+                    localStatus: resultado.statusDB,
+                    matchStrategy: resultado.matchStrategy,
+                    ambiguousFallback: resultado.ambiguousFallback,
+                    asaasEnv: ASAAS_ENV,
+                });
             }
 
             trackAssinaturaEvento({
@@ -879,6 +891,17 @@ const asaasWebHook = async (req, res) => {
                     eventId,
                     subscriptionId: subscription.id,
                     subscriptionExternalReference: subscription.externalReference || subscription.external_reference,
+                    asaasEnv: ASAAS_ENV,
+                });
+            } else {
+                console.info("Webhook Asaas vinculado a assinatura local", {
+                    event,
+                    eventId,
+                    assinaturaId: resultado.assinatura.id,
+                    subscriptionId: subscription.id,
+                    localStatus: resultado.statusDB,
+                    matchStrategy: resultado.matchStrategy,
+                    ambiguousFallback: resultado.ambiguousFallback,
                     asaasEnv: ASAAS_ENV,
                 });
             }

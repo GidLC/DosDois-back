@@ -1063,7 +1063,6 @@ class AssinaturaModel {
               AND provider_subscription_id IS NULL
               AND provider_checkout_id IS NOT NULL
               AND provider_external_reference LIKE 'DD_ASAAS_ASSINATURA_%'
-              AND updated_at >= DATE_SUB(NOW(), INTERVAL 20 MINUTE)
             ORDER BY id DESC
             LIMIT 2
         `);
