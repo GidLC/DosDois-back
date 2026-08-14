@@ -925,9 +925,6 @@ class AssinaturaModel {
                         value: Number(plan.valor),
                     },
                 ],
-                customerData: {
-                    email: payerEmail,
-                },
                 subscription: {
                     cycle: periodicidadeToAsaasCycle(plan.periodicidade),
                     nextDueDate: toDateOnly(),
