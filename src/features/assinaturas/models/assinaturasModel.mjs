@@ -180,6 +180,13 @@ const buildMercadoPagoItems = (plan) => {
     ];
 };
 
+const buildMercadoPagoPreferenceItems = (plan) =>
+    buildMercadoPagoItems(plan).map((item) => ({
+        ...item,
+        id: String(plan.codigo || plan.id || item.title).slice(0, 256),
+        description: item.description || buildPlanDescription(plan),
+    }));
+
 const safeDeviceSessionId = (deviceSessionId) => {
     if (!deviceSessionId) return null;
 
@@ -218,8 +225,12 @@ const isMercadoPagoInternalError = (data, status) =>
 const getMercadoPagoPlanEnvName = (offerCode) =>
     `MP_PLAN_ID_${String(offerCode || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_TEST`;
 
-const buildExternalReference = (assinaturaId) =>
-    `DD_ASSINATURA_${String(assinaturaId).replace(/[^0-9A-Za-z_-]/g, "")}`.slice(0, 150);
+const buildExternalReference = (referenceId, prefix = "DD_ASSINATURA") => {
+    const safePrefix = String(prefix || "DD_REF").replace(/[^0-9A-Za-z_-]/g, "").slice(0, 40) || "DD_REF";
+    const safeReferenceId = String(referenceId || randomUUID()).replace(/[^0-9A-Za-z_-]/g, "");
+
+    return `${safePrefix}_${safeReferenceId}`.slice(0, 150);
+};
 
 const maskEmail = (email) => {
     const [name = "", domain = ""] = String(email || "").split("@");
@@ -459,6 +470,104 @@ class AssinaturaModel {
         `, [casal])
     }
 
+    static createCheckoutPreference = async (planKey, internalReferenceId, options = {}) => {
+        if (!MP_ACCESS_TOKEN) {
+            throw {
+                code: "MP_ACCESS_TOKEN_NOT_CONFIGURED",
+                status: 500,
+                message: "Configure MP_ACCESS_TOKEN para criar preferencias no Mercado Pago.",
+                mercadoPagoEnv: MP_ENV,
+            };
+        }
+
+        const payerEmail = normalizaEmail(options.email);
+
+        if (payerEmail && !isEmailValido(payerEmail)) {
+            throw {
+                code: "EMAIL_PAGADOR_INVALIDO",
+                status: 400,
+                message: "Informe um e-mail valido para criar a preferencia.",
+            };
+        }
+
+        const oferta = await this.getOfertaAtiva(planKey);
+        const planFallback = MP_PLANS[planKey];
+        const planCode = oferta?.codigo || planKey || planFallback?.codigo;
+        const plan = {
+            id: oferta?.plano_id || planFallback?.id,
+            codigo: planCode,
+            nome: oferta?.nome_publico || planFallback?.nome,
+            valor: oferta?.valor || planFallback?.valor,
+            periodicidade: oferta?.periodicidade || planFallback?.periodicidade,
+        };
+
+        if (!plan.id || !plan.valor) {
+            throw {
+                code: "INVALID_PLAN",
+                status: 400,
+                message: "Oferta invalida para criar a preferencia Mercado Pago.",
+                offerCode: plan.codigo,
+            };
+        }
+
+        const externalReference = buildExternalReference(internalReferenceId, "DD_MPREF");
+        const requestTraceId = randomUUID();
+        const preferencePayload = {
+            items: buildMercadoPagoPreferenceItems(plan),
+            external_reference: externalReference,
+            statement_descriptor: "DOSDOIS",
+            ...(payerEmail ? { payer: { email: payerEmail } } : {}),
+            ...(MP_WEBHOOK_URL ? { notification_url: MP_WEBHOOK_URL } : {}),
+        };
+
+        console.info("Criando preferencia Mercado Pago para validacao", {
+            requestTraceId,
+            mercadoPagoEnv: MP_ENV,
+            offerCode: plan.codigo,
+            externalReference,
+            payerEmail: payerEmail ? maskEmail(payerEmail) : null,
+            hasNotificationUrl: Boolean(MP_WEBHOOK_URL),
+        });
+
+        const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(preferencePayload),
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            console.error("Erro Mercado Pago ao criar preferencia:", {
+                requestTraceId,
+                httpStatus: response.status,
+                mercadoPagoEnv: MP_ENV,
+                mercadoPago: data,
+            });
+
+            throw {
+                code: "MP_PREFERENCE_CREATE_ERROR",
+                status: response.status || 502,
+                message: data?.message || "Nao foi possivel criar a preferencia no Mercado Pago.",
+                mercadoPago: data,
+                mercadoPagoEnv: MP_ENV,
+                requestTraceId,
+            };
+        }
+
+        return {
+            id: data?.id,
+            external_reference: externalReference,
+            init_point: data?.init_point,
+            sandbox_init_point: data?.sandbox_init_point,
+            mp_environment: MP_ENV,
+            requestTraceId,
+        };
+    }
+
     static createAssinatura = async (planKey, casal, email, token, optionsOrCallback, maybeCallback) => {
         const options = typeof optionsOrCallback === "function" ? {} : optionsOrCallback || {};
         const callback = typeof optionsOrCallback === "function" ? optionsOrCallback : maybeCallback;
@@ -559,7 +668,7 @@ class AssinaturaModel {
                 },
                 body: JSON.stringify({
                     reason,
-                    external_reference: assinaturaId,
+                    external_reference: externalReference,
                     items,
                     payer_email: payerEmail,
                     preapproval_plan_id: plan.mpPlanId,
