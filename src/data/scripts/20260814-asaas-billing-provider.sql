@@ -3,6 +3,38 @@
 
 SET @schema_name = 'dosdois';
 
+SET @created_at_type = (
+  SELECT DATA_TYPE
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @schema_name
+    AND TABLE_NAME = 'assinaturas'
+    AND COLUMN_NAME = 'created_at'
+);
+SET @sql = IF(
+  @created_at_type = 'date',
+  'ALTER TABLE dosdois.assinaturas MODIFY created_at DATETIME NULL',
+  'SELECT ''assinaturas.created_at ja esta como datetime ou equivalente'' AS info'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @updated_at_type = (
+  SELECT DATA_TYPE
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = @schema_name
+    AND TABLE_NAME = 'assinaturas'
+    AND COLUMN_NAME = 'updated_at'
+);
+SET @sql = IF(
+  @updated_at_type = 'date',
+  'ALTER TABLE dosdois.assinaturas MODIFY updated_at DATETIME NULL',
+  'SELECT ''assinaturas.updated_at ja esta como datetime ou equivalente'' AS info'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 SET @status_type = (
   SELECT COLUMN_TYPE
   FROM INFORMATION_SCHEMA.COLUMNS
