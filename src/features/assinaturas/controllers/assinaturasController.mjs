@@ -263,6 +263,11 @@ const createPreferenceValidacao = async (req, res) => {
             message: "Preferencia Mercado Pago criada para validacao.",
             preferenceId: preference.id,
             externalReference: preference.external_reference,
+            initPoint: preference.init_point,
+            sandboxInitPoint: preference.sandbox_init_point,
+            checkoutUrl: preference.mp_environment === "test"
+                ? preference.sandbox_init_point || preference.init_point
+                : preference.init_point,
             mercadoPagoEnv: preference.mp_environment,
             requestTraceId: preference.requestTraceId,
         });
@@ -551,6 +556,9 @@ const mpWebHook = async (req, res) => {
         if (type === "payment") {
             const pagamento = await getPagamentoMP(data.id);
             const externalReference = pagamento?.external_reference;
+            const items = Array.isArray(pagamento?.additional_info?.items)
+                ? pagamento.additional_info.items
+                : [];
 
             trackAssinaturaEvento({
                 evento: pagamento?.status === "approved"
@@ -564,6 +572,8 @@ const mpWebHook = async (req, res) => {
                     paymentMethodId: pagamento?.payment_method_id,
                     preferenceId: pagamento?.preference_id,
                     externalReference,
+                    hasExternalReference: Boolean(externalReference),
+                    hasItemDescription: items.some((item) => Boolean(item?.description)),
                     preferenceInternalReference: getPreferenceInternalReference(externalReference),
                     transactionAmount: pagamento?.transaction_amount,
                 },
