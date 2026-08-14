@@ -446,11 +446,20 @@ const getAssinaturaMP = async (id) => {
         }
     );
 
+    const data = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-        throw new Error("Erro ao consultar assinatura no Mercado Pago");
+        throw {
+            code: "MP_PREAPPROVAL_FETCH_ERROR",
+            status: response.status || 502,
+            message: data?.message || "Erro ao consultar assinatura no Mercado Pago",
+            mercadoPago: data,
+            mercadoPagoEnv: MP_ENV,
+            mpResourceId: id,
+        };
     }
 
-    return await response.json();
+    return data;
 };
 
 const getPagamentoAutorizadoMP = async (id) => {
@@ -469,11 +478,20 @@ const getPagamentoAutorizadoMP = async (id) => {
         }
     );
 
+    const data = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-        throw new Error("Erro ao consultar fatura da assinatura no Mercado Pago");
+        throw {
+            code: "MP_AUTHORIZED_PAYMENT_FETCH_ERROR",
+            status: response.status || 502,
+            message: data?.message || "Erro ao consultar fatura da assinatura no Mercado Pago",
+            mercadoPago: data,
+            mercadoPagoEnv: MP_ENV,
+            mpResourceId: id,
+        };
     }
 
-    return await response.json();
+    return data;
 };
 
 const getPagamentoMP = async (id) => {
@@ -492,11 +510,20 @@ const getPagamentoMP = async (id) => {
         }
     );
 
+    const data = await response.json().catch(() => ({}));
+
     if (!response.ok) {
-        throw new Error("Erro ao consultar pagamento no Mercado Pago");
+        throw {
+            code: "MP_PAYMENT_FETCH_ERROR",
+            status: response.status || 502,
+            message: data?.message || "Erro ao consultar pagamento no Mercado Pago",
+            mercadoPago: data,
+            mercadoPagoEnv: MP_ENV,
+            mpResourceId: id,
+        };
     }
 
-    return await response.json();
+    return data;
 };
 
 const mpWebHookHealth = (req, res) => {
@@ -633,15 +660,32 @@ const mpWebHook = async (req, res) => {
 
     } catch (error) {
 
-        console.error("Erro webhook MP:", error);
+        console.error("Erro webhook MP:", {
+            code: error?.code,
+            status: error?.status,
+            message: error?.message,
+            mercadoPagoEnv: error?.mercadoPagoEnv || MP_ENV,
+            mpResourceId: error?.mpResourceId,
+            mercadoPago: error?.mercadoPago,
+        });
 
         trackAssinaturaEvento({
-            evento: "webhook_failed",
+            evento: error?.code?.startsWith?.("MP_") ? "webhook_fetch_failed" : "webhook_failed",
             source: "mercado_pago",
             status: error?.code || "erro",
-            metadata: { message: error?.message },
+            metadata: {
+                message: error?.message,
+                httpStatus: error?.status,
+                mercadoPagoEnv: error?.mercadoPagoEnv || MP_ENV,
+                mpResourceId: error?.mpResourceId,
+                mercadoPago: error?.mercadoPago,
+            },
             req,
         });
+
+        if (error?.code?.startsWith?.("MP_")) {
+            return res.sendStatus(200);
+        }
 
         return res.sendStatus(500);
     }
