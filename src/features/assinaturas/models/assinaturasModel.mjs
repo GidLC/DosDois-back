@@ -1013,6 +1013,8 @@ class AssinaturaModel {
     };
 
     static buscarAssinaturaPorProviderExternalReference = async (billingProvider, externalReference) => {
+        if (!externalReference) return null;
+
         const [assinatura] = await queryAsync(`
             SELECT *
             FROM assinaturas
@@ -1022,6 +1024,21 @@ class AssinaturaModel {
         `, [billingProvider, externalReference]);
 
         return assinatura;
+    };
+
+    static buscarUnicaAssinaturaAsaasPendenteSemSubscription = async () => {
+        const assinaturas = await queryAsync(`
+            SELECT *
+            FROM assinaturas
+            WHERE billing_provider = 'asaas'
+              AND status IN ('pendente', 'criando')
+              AND provider_subscription_id IS NULL
+              AND updated_at >= DATE_SUB(NOW(), INTERVAL 6 HOUR)
+            ORDER BY id DESC
+            LIMIT 2
+        `);
+
+        return assinaturas.length === 1 ? assinaturas[0] : null;
     };
 
     static atualizarStatusAssinatura = async (mpId, status, assinatura, authorizedPayment = null) => {
@@ -1078,44 +1095,57 @@ class AssinaturaModel {
     static atualizarAssinaturaAsaas = async (subscription) => {
         if (!subscription?.id) return null;
 
+        const subscriptionCompleta = await getAsaasSubscription(subscription.id).catch(() => null);
+        const subscriptionAtual = {
+            ...subscriptionCompleta,
+            ...subscription,
+        };
+        const externalReference = subscriptionAtual.externalReference || subscriptionAtual.external_reference;
         const assinatura = await this.buscarAssinaturaPorProviderSubscriptionId("asaas", subscription.id)
-            || await this.buscarAssinaturaPorProviderExternalReference("asaas", subscription.externalReference);
+            || await this.buscarAssinaturaPorProviderExternalReference("asaas", externalReference)
+            || await this.buscarUnicaAssinaturaAsaasPendenteSemSubscription();
         if (!assinatura) return null;
 
-        const statusDB = statusAsaasSubscriptionToDb(subscription.status);
+        const statusDB = statusAsaasSubscriptionToDb(subscriptionAtual.status);
 
         await queryAsync(`
             UPDATE assinaturas
             SET status = ?,
                 billing_provider = 'asaas',
                 provider_subscription_id = ?,
+                provider_external_reference = COALESCE(provider_external_reference, ?),
                 provider_status = ?,
                 updated_at = NOW()
             WHERE id = ?
-        `, [statusDB, subscription.id, subscription.status, assinatura.id]);
+        `, [statusDB, subscriptionAtual.id, externalReference || null, subscriptionAtual.status, assinatura.id]);
 
         return {
             assinatura,
+            subscription: subscriptionAtual,
             statusDB,
         };
     };
 
     static atualizarPagamentoAsaas = async (payment) => {
         const subscriptionId = payment?.subscription;
-        const externalReference = payment?.externalReference || payment?.external_reference;
+        const subscription = subscriptionId
+            ? await getAsaasSubscription(subscriptionId).catch(() => null)
+            : null;
+        const externalReference = payment?.externalReference
+            || payment?.external_reference
+            || subscription?.externalReference
+            || subscription?.external_reference;
         if (!subscriptionId && !externalReference) return null;
 
         const assinatura = (
             subscriptionId
                 ? await this.buscarAssinaturaPorProviderSubscriptionId("asaas", subscriptionId)
                 : null
-        ) || await this.buscarAssinaturaPorProviderExternalReference("asaas", externalReference);
+        ) || await this.buscarAssinaturaPorProviderExternalReference("asaas", externalReference)
+            || await this.buscarUnicaAssinaturaAsaasPendenteSemSubscription();
         if (!assinatura) return null;
 
         const statusDB = statusAsaasPaymentToDb(payment.status);
-        const subscription = subscriptionId
-            ? await getAsaasSubscription(subscriptionId).catch(() => null)
-            : null;
         const shouldActivate = statusDB === "ativa";
 
         if (shouldActivate) {
@@ -1127,6 +1157,7 @@ class AssinaturaModel {
                 SET status = 'ativa',
                     billing_provider = 'asaas',
                     provider_subscription_id = COALESCE(?, provider_subscription_id),
+                    provider_external_reference = COALESCE(provider_external_reference, ?),
                     provider_payment_id = ?,
                     provider_status = ?,
                     inicio = ?,
@@ -1135,6 +1166,7 @@ class AssinaturaModel {
                 WHERE id = ?
             `, [
                 subscriptionId || null,
+                externalReference || null,
                 payment.id,
                 payment.status,
                 toDateOnly(inicio),
@@ -1147,11 +1179,12 @@ class AssinaturaModel {
                 SET status = ?,
                     billing_provider = 'asaas',
                     provider_subscription_id = COALESCE(?, provider_subscription_id),
+                    provider_external_reference = COALESCE(provider_external_reference, ?),
                     provider_payment_id = ?,
                     provider_status = ?,
                     updated_at = NOW()
                 WHERE id = ?
-            `, [statusDB, subscriptionId || null, payment.id, payment.status, assinatura.id]);
+            `, [statusDB, subscriptionId || null, externalReference || null, payment.id, payment.status, assinatura.id]);
         }
 
         return {
