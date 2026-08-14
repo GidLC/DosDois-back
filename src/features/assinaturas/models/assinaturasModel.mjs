@@ -3,6 +3,8 @@ import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
 import { pool } from "../../../config/config.mjs";
 import separaData from "../../../data/SeparaData/SeparaData.mjs";
 import { MP_ACCESS_TOKEN, MP_ENV, MP_WEBHOOK_URL, getMercadoPagoPlanIdOverride } from "../mpToken.mjs";
+import { ASAAS_CHECKOUT_CANCEL_URL, ASAAS_CHECKOUT_EXPIRED_URL, ASAAS_CHECKOUT_SUCCESS_URL, ASAAS_ENV } from "../asaasConfig.mjs";
+import { createAsaasCheckout, deleteAsaasSubscription, getAsaasSubscription } from "../asaasClient.mjs";
 import { MP_PLANS } from "../utils/MP_PLANS.mjs";
 import { randomUUID } from "crypto";
 
@@ -186,6 +188,70 @@ const buildMercadoPagoPreferenceItems = (plan) =>
         id: String(plan.codigo || plan.id || item.title).slice(0, 256),
         description: item.description || buildPlanDescription(plan),
     }));
+
+const periodicidadeToAsaasCycle = (periodicidade) =>
+    periodicidade === "anual" ? "YEARLY" : "MONTHLY";
+
+const toDateOnly = (date = new Date()) =>
+    date.toISOString().slice(0, 10);
+
+const statusAsaasPaymentToDb = (status) => {
+    const statusMap = {
+        RECEIVED: "ativa",
+        CONFIRMED: "ativa",
+        RECEIVED_IN_CASH: "ativa",
+        PENDING: "pendente",
+        OVERDUE: "pendente",
+        REFUNDED: "cancelada",
+        REFUND_REQUESTED: "pendente",
+        CHARGEBACK_REQUESTED: "pendente",
+        CHARGEBACK_DISPUTE: "pendente",
+        AWAITING_CHARGEBACK_REVERSAL: "pendente",
+        DUNNING_REQUESTED: "pendente",
+        DUNNING_RECEIVED: "ativa",
+        DELETED: "cancelada",
+        CANCELLED: "cancelada",
+    };
+
+    return statusMap[String(status || "").toUpperCase()] || "pendente";
+};
+
+const statusAsaasSubscriptionToDb = (status) => {
+    const statusMap = {
+        ACTIVE: "pendente",
+        INACTIVE: "pausada",
+        DELETED: "cancelada",
+        CANCELLED: "cancelada",
+    };
+
+    return statusMap[String(status || "").toUpperCase()] || "pendente";
+};
+
+const getPeriodFromAsaasCycle = (cycle) => {
+    const normalizedCycle = String(cycle || "").toUpperCase();
+
+    if (normalizedCycle === "YEARLY") {
+        return { unit: "years", amount: 1 };
+    }
+
+    if (normalizedCycle === "SEMIANNUALLY") {
+        return { unit: "months", amount: 6 };
+    }
+
+    if (normalizedCycle === "QUARTERLY") {
+        return { unit: "months", amount: 3 };
+    }
+
+    if (normalizedCycle === "BIWEEKLY") {
+        return { unit: "days", amount: 14 };
+    }
+
+    if (normalizedCycle === "WEEKLY") {
+        return { unit: "days", amount: 7 };
+    }
+
+    return { unit: "months", amount: 1 };
+};
 
 const safeDeviceSessionId = (deviceSessionId) => {
     if (!deviceSessionId) return null;
@@ -377,7 +443,7 @@ class AssinaturaModel {
         return assinatura
     }
 
-    static reservaAssinatura = async (casal, planId) => {
+    static reservaAssinatura = async (casal, planId, billingProvider = "mercado_pago") => {
         const connection = await getConnection();
 
         try {
@@ -426,20 +492,27 @@ class AssinaturaModel {
                             status = 'criando',
                             mp_status = NULL,
                             mp_preapproval_id = NULL,
+                            billing_provider = ?,
+                            provider_subscription_id = NULL,
+                            provider_checkout_id = NULL,
+                            provider_external_reference = NULL,
+                            provider_customer_id = NULL,
+                            provider_payment_id = NULL,
+                            provider_status = NULL,
                             updated_at = NOW()
                         WHERE id = ?
                     `,
-                    [planId, assinatura.id],
+                    [planId, billingProvider, assinatura.id],
                 );
             } else {
                 const insertResult = await connectionQuery(
                     connection,
                     `
                         INSERT INTO assinaturas
-                            (casal, plano_id, status, mp_status, mp_preapproval_id, created_at, updated_at)
-                        VALUES (?, ?, 'criando', NULL, NULL, NOW(), NOW())
+                            (casal, plano_id, status, mp_status, mp_preapproval_id, billing_provider, created_at, updated_at)
+                        VALUES (?, ?, 'criando', NULL, NULL, ?, NOW(), NOW())
                     `,
-                    [casal, planId],
+                    [casal, planId, billingProvider],
                 );
 
                 assinaturaId = insertResult.insertId;
@@ -464,6 +537,7 @@ class AssinaturaModel {
             UPDATE assinaturas
             SET status = 'cancelada',
                 mp_status = 'creation_failed',
+                provider_status = COALESCE(provider_status, 'creation_failed'),
                 updated_at = NOW()
             WHERE casal = ?
               AND status = 'criando'
@@ -636,7 +710,7 @@ class AssinaturaModel {
                 }, null);
             }
 
-            const assinaturaId = await this.reservaAssinatura(casal, plan.id);
+            const assinaturaId = await this.reservaAssinatura(casal, plan.id, "mercado_pago");
             const externalReference = buildExternalReference(assinaturaId);
             const items = buildMercadoPagoItems(plan);
             const reason = buildPlanTitle(plan);
@@ -761,10 +835,17 @@ class AssinaturaModel {
                     status = ?,
                     mp_status = ?,
                     mp_preapproval_id = ?,
+                    billing_provider = 'mercado_pago',
+                    provider_subscription_id = ?,
+                    provider_checkout_id = NULL,
+                    provider_external_reference = ?,
+                    provider_customer_id = NULL,
+                    provider_payment_id = ?,
+                    provider_status = ?,
                     created_at = ?,
                     updated_at = ?
                 WHERE casal = ?`,
-                [plan.id, localStatus, data.status, data.id, data.date_created, data.last_modified, casal])
+                [plan.id, localStatus, data.status, data.id, data.id, externalReference, authorizedPayment?.payment?.id || null, data.status, data.date_created, data.last_modified, casal])
 
             await this.atualizarStatusAssinatura(data.id, data.status, data, authorizedPayment);
 
@@ -780,6 +861,138 @@ class AssinaturaModel {
         }
     };
 
+    static createAssinaturaAsaas = async (planKey, casal, email, _paymentData = {}, optionsOrCallback, maybeCallback) => {
+        const callback = typeof optionsOrCallback === "function" ? optionsOrCallback : maybeCallback;
+
+        try {
+            const payerEmail = normalizaEmail(email);
+
+            if (!isEmailValido(payerEmail)) {
+                return callback({
+                    code: "EMAIL_PAGADOR_INVALIDO",
+                    status: 400,
+                    message: "Informe um e-mail valido para concluir a assinatura.",
+                }, null);
+            }
+
+            const oferta = await this.getOfertaAtiva(planKey);
+            const planFallback = MP_PLANS[planKey];
+            const planCode = oferta?.codigo || planKey || planFallback?.codigo;
+            const plan = {
+                id: oferta?.plano_id || planFallback?.id,
+                codigo: planCode,
+                nome: oferta?.nome_publico || planFallback?.nome,
+                valor: oferta?.valor || planFallback?.valor,
+                periodicidade: oferta?.periodicidade || planFallback?.periodicidade,
+            };
+
+            if (!plan.id || !plan.valor) {
+                return callback({
+                    code: "INVALID_PLAN",
+                    status: 400,
+                    message: "Oferta invalida para criar assinatura no Asaas.",
+                    offerCode: plan.codigo,
+                }, null);
+            }
+
+            const assinaturaId = await this.reservaAssinatura(casal, plan.id, "asaas");
+            const externalReference = buildExternalReference(assinaturaId, "DD_ASAAS_ASSINATURA");
+            const requestTraceId = randomUUID();
+
+            console.info("Criando checkout recorrente Asaas", {
+                requestTraceId,
+                asaasEnv: ASAAS_ENV,
+                offerCode: plan.codigo,
+                externalReference,
+                payerEmail: maskEmail(payerEmail),
+            });
+
+            const checkout = await createAsaasCheckout({
+                billingTypes: ["CREDIT_CARD", "PIX"],
+                chargeTypes: ["RECURRENT"],
+                minutesToExpire: 60,
+                externalReference,
+                callback: {
+                    successUrl: ASAAS_CHECKOUT_SUCCESS_URL,
+                    cancelUrl: ASAAS_CHECKOUT_CANCEL_URL,
+                    expiredUrl: ASAAS_CHECKOUT_EXPIRED_URL,
+                },
+                items: [
+                    {
+                        name: buildPlanTitle(plan),
+                        description: buildPlanDescription(plan),
+                        quantity: 1,
+                        value: Number(plan.valor),
+                    },
+                ],
+                customerData: {
+                    email: payerEmail,
+                },
+                subscription: {
+                    cycle: periodicidadeToAsaasCycle(plan.periodicidade),
+                    nextDueDate: toDateOnly(),
+                },
+            }, requestTraceId);
+            const checkoutUrl = checkout?.link || checkout?.url || checkout?.checkoutUrl;
+
+            if (!checkoutUrl) {
+                throw {
+                    code: "ASAAS_CHECKOUT_URL_MISSING",
+                    status: 502,
+                    message: "O Asaas criou o checkout, mas nao retornou o link de pagamento.",
+                    asaas: checkout,
+                    asaasEnv: ASAAS_ENV,
+                    requestTraceId,
+                };
+            }
+
+            await queryAsync(`
+                UPDATE assinaturas
+                SET plano_id = ?,
+                    status = 'pendente',
+                    mp_status = NULL,
+                    mp_preapproval_id = NULL,
+                    billing_provider = 'asaas',
+                    provider_subscription_id = NULL,
+                    provider_checkout_id = ?,
+                    provider_external_reference = ?,
+                    provider_customer_id = NULL,
+                    provider_payment_id = NULL,
+                    provider_status = ?,
+                    created_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = ?
+            `, [
+                plan.id,
+                checkout.id,
+                externalReference,
+                checkout.status || "checkout_created",
+                assinaturaId,
+            ]);
+
+            return callback(null, {
+                ...checkout,
+                assinatura_id: assinaturaId,
+                external_reference: externalReference,
+                billing_provider: "asaas",
+                asaas_environment: ASAAS_ENV,
+                checkout_url: checkoutUrl,
+                requestTraceId,
+            });
+        } catch (error) {
+            console.error("Erro ao registrar assinatura Asaas:", {
+                code: error?.code,
+                status: error?.status,
+                message: error?.message,
+                asaasEnv: error?.asaasEnv || ASAAS_ENV,
+                requestTraceId: error?.requestTraceId,
+                asaas: error?.asaas,
+            });
+            await this.marcaFalhaCriacao(casal);
+            return callback(error, null);
+        }
+    };
+
     static buscarAssinaturaPorMPId = async (mpId) => {
 
         const [rows] = await queryAsync(
@@ -788,6 +1001,30 @@ class AssinaturaModel {
         )
 
         return rows;
+    };
+
+    static buscarAssinaturaPorProviderSubscriptionId = async (billingProvider, subscriptionId) => {
+        const [assinatura] = await queryAsync(`
+            SELECT *
+            FROM assinaturas
+            WHERE billing_provider = ?
+              AND provider_subscription_id = ?
+            LIMIT 1
+        `, [billingProvider, subscriptionId]);
+
+        return assinatura;
+    };
+
+    static buscarAssinaturaPorProviderExternalReference = async (billingProvider, externalReference) => {
+        const [assinatura] = await queryAsync(`
+            SELECT *
+            FROM assinaturas
+            WHERE billing_provider = ?
+              AND provider_external_reference = ?
+            LIMIT 1
+        `, [billingProvider, externalReference]);
+
+        return assinatura;
     };
 
     static atualizarStatusAssinatura = async (mpId, status, assinatura, authorizedPayment = null) => {
@@ -841,15 +1078,93 @@ class AssinaturaModel {
         };
     }
 
-    static cancelarAssinatura = async (casal) => {
-        if (!MP_ACCESS_TOKEN) {
-            throw {
-                code: "MP_ACCESS_TOKEN_NOT_CONFIGURED",
-                status: 503,
-                message: "Mercado Pago nao configurado.",
-            };
+    static atualizarAssinaturaAsaas = async (subscription) => {
+        if (!subscription?.id) return null;
+
+        const assinatura = await this.buscarAssinaturaPorProviderSubscriptionId("asaas", subscription.id)
+            || await this.buscarAssinaturaPorProviderExternalReference("asaas", subscription.externalReference);
+        if (!assinatura) return null;
+
+        const statusDB = statusAsaasSubscriptionToDb(subscription.status);
+
+        await queryAsync(`
+            UPDATE assinaturas
+            SET status = ?,
+                billing_provider = 'asaas',
+                provider_subscription_id = ?,
+                provider_status = ?,
+                updated_at = NOW()
+            WHERE id = ?
+        `, [statusDB, subscription.id, subscription.status, assinatura.id]);
+
+        return {
+            assinatura,
+            statusDB,
+        };
+    };
+
+    static atualizarPagamentoAsaas = async (payment) => {
+        const subscriptionId = payment?.subscription;
+        const externalReference = payment?.externalReference || payment?.external_reference;
+        if (!subscriptionId && !externalReference) return null;
+
+        const assinatura = (
+            subscriptionId
+                ? await this.buscarAssinaturaPorProviderSubscriptionId("asaas", subscriptionId)
+                : null
+        ) || await this.buscarAssinaturaPorProviderExternalReference("asaas", externalReference);
+        if (!assinatura) return null;
+
+        const statusDB = statusAsaasPaymentToDb(payment.status);
+        const subscription = subscriptionId
+            ? await getAsaasSubscription(subscriptionId).catch(() => null)
+            : null;
+        const shouldActivate = statusDB === "ativa";
+
+        if (shouldActivate) {
+            const inicio = new Date();
+            const fim = addSubscriptionPeriod(inicio, getPeriodFromAsaasCycle(subscription?.cycle));
+
+            await queryAsync(`
+                UPDATE assinaturas
+                SET status = 'ativa',
+                    billing_provider = 'asaas',
+                    provider_subscription_id = COALESCE(?, provider_subscription_id),
+                    provider_payment_id = ?,
+                    provider_status = ?,
+                    inicio = ?,
+                    fim = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            `, [
+                subscriptionId || null,
+                payment.id,
+                payment.status,
+                toDateOnly(inicio),
+                toDateOnly(fim),
+                assinatura.id,
+            ]);
+        } else {
+            await queryAsync(`
+                UPDATE assinaturas
+                SET status = ?,
+                    billing_provider = 'asaas',
+                    provider_subscription_id = COALESCE(?, provider_subscription_id),
+                    provider_payment_id = ?,
+                    provider_status = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            `, [statusDB, subscriptionId || null, payment.id, payment.status, assinatura.id]);
         }
 
+        return {
+            assinatura,
+            subscription,
+            statusDB,
+        };
+    };
+
+    static cancelarAssinatura = async (casal) => {
         const assinatura = await this.getAssinaturaCancelavel(casal);
 
         if (!assinatura) {
@@ -857,6 +1172,52 @@ class AssinaturaModel {
                 code: "ASSINATURA_CANCELAVEL_NAO_ENCONTRADA",
                 status: 404,
                 message: "Nenhuma assinatura paga em aberto encontrada.",
+            };
+        }
+
+        if (assinatura.billing_provider === "asaas") {
+            if (!assinatura.provider_subscription_id) {
+                await queryAsync(`
+                    UPDATE assinaturas
+                    SET status = 'cancelada',
+                        provider_status = 'cancel_local_sem_asaas',
+                        updated_at = NOW()
+                    WHERE id = ?
+                `, [assinatura.id]);
+
+                return {
+                    id: assinatura.id,
+                    status: "cancelada",
+                    provider_status: "cancel_local_sem_asaas",
+                    billing_provider: "asaas",
+                };
+            }
+
+            const requestTraceId = randomUUID();
+            const data = await deleteAsaasSubscription(assinatura.provider_subscription_id, requestTraceId);
+
+            await queryAsync(`
+                UPDATE assinaturas
+                SET status = 'cancelada',
+                    provider_status = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            `, [data?.status || "deleted", assinatura.id]);
+
+            return {
+                id: assinatura.id,
+                status: "cancelada",
+                provider_status: data?.status || "deleted",
+                billing_provider: "asaas",
+                requestTraceId,
+            };
+        }
+
+        if (!MP_ACCESS_TOKEN) {
+            throw {
+                code: "MP_ACCESS_TOKEN_NOT_CONFIGURED",
+                status: 503,
+                message: "Mercado Pago nao configurado.",
             };
         }
 

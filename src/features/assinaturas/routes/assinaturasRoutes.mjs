@@ -9,6 +9,8 @@ assinaturasRouter.post('/cancelar', autenticarJWT, assinaturasController.cancela
 assinaturasRouter.post('/createSub', assinaturasController.createAssinatura)
 assinaturasRouter.get('/mpWebHook', assinaturasController.mpWebHookHealth)
 assinaturasRouter.post('/mpWebHook', assinaturasController.mpWebHook)
+assinaturasRouter.get('/asaasWebHook', assinaturasController.asaasWebHookHealth)
+assinaturasRouter.post('/asaasWebHook', assinaturasController.asaasWebHook)
 assinaturasRouter.post('/eventos', assinaturasController.registrarEventoConversao)
 assinaturasRouter.get('/ofertas', assinaturasController.getOfertas)
 

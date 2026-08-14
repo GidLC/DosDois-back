@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../../../data/apiConfig.mjs";
 import { MP_ACCESS_TOKEN, MP_ENV } from "../mpToken.mjs";
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs";
+import { BILLING_PROVIDER, IS_ASAAS_BILLING_PROVIDER } from "../billingProviderConfig.mjs";
+import { ASAAS_ENV, ASAAS_WEBHOOK_TOKEN } from "../asaasConfig.mjs";
 
 const getCodCasalFromAuth = async (auth) => {
     if (auth?.cod_casal) return auth.cod_casal;
@@ -49,6 +51,15 @@ const getCheckoutContext = (checkoutToken) => {
     } catch {
         return null;
     }
+}
+
+const getClientIp = (req) => {
+    const forwardedFor = req?.headers?.["x-forwarded-for"];
+    const rawIp = Array.isArray(forwardedFor)
+        ? forwardedFor[0]
+        : String(forwardedFor || req?.ip || req?.socket?.remoteAddress || "");
+
+    return rawIp.split(",")[0].trim();
 }
 
 const normalizaEmail = (email) =>
@@ -361,6 +372,88 @@ const createAssinatura = (req, res) => {
         metadata: { emailInformado: true },
         req,
     });
+
+    if (IS_ASAAS_BILLING_PROVIDER) {
+        const remoteIp = getClientIp(req);
+        const paymentData = {
+            remoteIp,
+        };
+
+        AssinaturaModel.createAssinaturaAsaas(checkout.offerId, checkout.cod_casal, payerEmail, paymentData, { remoteIp }, (err, results) => {
+            if (err) {
+                console.error('Erro ao registrar assinatura Asaas', {
+                    code: err?.code,
+                    status: err?.status,
+                    message: err?.message,
+                    asaasEnv: err?.asaasEnv || ASAAS_ENV,
+                    requestTraceId: err?.requestTraceId,
+                    asaas: err?.asaas,
+                });
+
+                const status = Number.isInteger(err?.status) ? err.status : 500;
+                const errorCode = typeof err === 'string'
+                    ? err
+                    : err?.code || err?.error || 'ERRO_REGISTRAR_ASSINATURA_ASAAS';
+                const message = typeof err === 'string'
+                    ? 'Nao foi possivel registrar a assinatura agora.'
+                    : err?.message || 'Nao foi possivel registrar a assinatura agora.';
+
+                trackAssinaturaEvento({
+                    evento: "payment_failed",
+                    source: "checkout",
+                    status: errorCode,
+                    offerId: checkout.offerId,
+                    casal: checkout.cod_casal,
+                    usuario: checkout.userId,
+                    metadata: {
+                        billingProvider: BILLING_PROVIDER,
+                        httpStatus: status,
+                        asaasEnv: err?.asaasEnv || ASAAS_ENV,
+                        requestTraceId: err?.requestTraceId,
+                    },
+                    req,
+                });
+
+                return res.status(status).json({
+                    error: errorCode,
+                    message,
+                    billingProvider: BILLING_PROVIDER,
+                    asaasEnv: err?.asaasEnv || ASAAS_ENV,
+                    requestTraceId: err?.requestTraceId,
+                });
+            }
+
+            trackAssinaturaEvento({
+                evento: "payment_success",
+                source: "checkout",
+                status: results?.status || "submitted",
+                offerId: checkout.offerId,
+                casal: checkout.cod_casal,
+                usuario: checkout.userId,
+                assinaturaId: results?.assinatura_id,
+                metadata: {
+                    billingProvider: BILLING_PROVIDER,
+                    externalReference: results?.external_reference,
+                    asaasEnv: results?.asaas_environment || ASAAS_ENV,
+                    providerCheckoutId: results?.id,
+                },
+                req,
+            });
+
+            return res.status(200).json({
+                message: 'Assinatura registrada com sucesso',
+                results,
+                status: results?.status,
+                assinaturaId: results?.assinatura_id,
+                providerCheckoutId: results?.id,
+                checkoutUrl: results?.checkout_url || results?.link,
+                billingProvider: BILLING_PROVIDER,
+                asaasEnv: results?.asaas_environment || ASAAS_ENV,
+            });
+        });
+
+        return;
+    }
 
     AssinaturaModel.createAssinatura(checkout.offerId, checkout.cod_casal, payerEmail, token, { deviceSessionId }, (err, results) => {
         if (err) {
@@ -691,6 +784,134 @@ const mpWebHook = async (req, res) => {
     }
 };
 
+const asaasWebHookHealth = (req, res) => {
+    return res.status(200).json({
+        ok: true,
+        message: "Webhook Asaas ativo",
+        asaasEnv: ASAAS_ENV,
+    });
+};
+
+const asaasWebHook = async (req, res) => {
+    const event = req.body?.event;
+    const payment = req.body?.payment;
+    const subscription = req.body?.subscription;
+    const eventId = req.body?.id;
+
+    try {
+        const receivedToken = String(req.headers?.["asaas-access-token"] || "").trim();
+
+        if (ASAAS_WEBHOOK_TOKEN && receivedToken !== ASAAS_WEBHOOK_TOKEN) {
+            console.warn("Webhook Asaas com token invalido", {
+                event,
+                eventId,
+                asaasEnv: ASAAS_ENV,
+            });
+
+            return res.sendStatus(401);
+        }
+
+        console.log("Webhook Asaas recebido", {
+            event,
+            eventId,
+            paymentId: payment?.id,
+            subscriptionId: subscription?.id || payment?.subscription,
+        });
+
+        trackAssinaturaEvento({
+            evento: "webhook_received",
+            source: "asaas",
+            status: event,
+            metadata: {
+                eventId,
+                paymentId: payment?.id,
+                paymentStatus: payment?.status,
+                subscriptionId: subscription?.id || payment?.subscription,
+                asaasEnv: ASAAS_ENV,
+            },
+            req,
+        });
+
+        if (event?.startsWith?.("PAYMENT_") && payment?.id) {
+            const resultado = await AssinaturaModel.atualizarPagamentoAsaas(payment);
+
+            trackAssinaturaEvento({
+                evento: ["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"].includes(event)
+                    ? "subscription_payment_approved"
+                    : "subscription_payment_status_updated",
+                source: "asaas",
+                status: payment.status || event,
+                casal: resultado?.assinatura?.casal,
+                assinaturaId: resultado?.assinatura?.id,
+                metadata: {
+                    eventId,
+                    paymentId: payment.id,
+                    subscriptionId: payment.subscription,
+                    paymentStatus: payment.status,
+                    localStatus: resultado?.statusDB,
+                    asaasEnv: ASAAS_ENV,
+                },
+                req,
+            });
+
+            return res.sendStatus(200);
+        }
+
+        if (event?.startsWith?.("SUBSCRIPTION_") && subscription?.id) {
+            const resultado = await AssinaturaModel.atualizarAssinaturaAsaas(subscription);
+
+            trackAssinaturaEvento({
+                evento: "subscription_status_updated",
+                source: "asaas",
+                status: subscription.status || event,
+                casal: resultado?.assinatura?.casal,
+                assinaturaId: resultado?.assinatura?.id,
+                metadata: {
+                    eventId,
+                    subscriptionId: subscription.id,
+                    subscriptionStatus: subscription.status,
+                    localStatus: resultado?.statusDB,
+                    asaasEnv: ASAAS_ENV,
+                },
+                req,
+            });
+
+            return res.sendStatus(200);
+        }
+
+        return res.sendStatus(200);
+    } catch (error) {
+        console.error("Erro webhook Asaas:", {
+            code: error?.code,
+            status: error?.status,
+            message: error?.message,
+            asaasEnv: error?.asaasEnv || ASAAS_ENV,
+            asaas: error?.asaas,
+        });
+
+        trackAssinaturaEvento({
+            evento: "webhook_failed",
+            source: "asaas",
+            status: error?.code || "erro",
+            metadata: {
+                event,
+                eventId,
+                message: error?.message,
+                httpStatus: error?.status,
+                asaasEnv: error?.asaasEnv || ASAAS_ENV,
+                asaas: error?.asaas,
+            },
+            req,
+        });
+
+        if (error?.code?.startsWith?.("ASAAS_")) {
+            return res.sendStatus(200);
+        }
+
+        return res.sendStatus(500);
+    }
+};
+
 const getOfertas = async (req, res) => {
     const contexto = req.query?.contexto || 'site_pricing';
 
@@ -806,4 +1027,4 @@ const registrarEventoConversao = async (req, res) => {
     });
 }
 
-export default { createCheckout, createPreferenceValidacao, createAssinatura, mpWebHook, mpWebHookHealth, getOfertas, cancelarAssinatura, registrarEventoConversao }
+export default { createCheckout, createPreferenceValidacao, createAssinatura, mpWebHook, mpWebHookHealth, asaasWebHook, asaasWebHookHealth, getOfertas, cancelarAssinatura, registrarEventoConversao }
