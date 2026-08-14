@@ -908,7 +908,7 @@ class AssinaturaModel {
             });
 
             const checkout = await createAsaasCheckout({
-                billingTypes: ["CREDIT_CARD", "PIX"],
+                billingTypes: ["CREDIT_CARD"],
                 chargeTypes: ["RECURRENT"],
                 minutesToExpire: 60,
                 externalReference,
