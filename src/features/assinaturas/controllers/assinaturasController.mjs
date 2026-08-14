@@ -57,6 +57,11 @@ const normalizaEmail = (email) =>
 const isEmailValido = (email) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+const getPreferenceInternalReference = (externalReference) => {
+    const match = String(externalReference || "").match(/^DD_MPREF_([0-9A-Za-z_-]+)/);
+    return match?.[1] || null;
+}
+
 const createCheckout = async (req, res) => {
     try {
         const { offerId, planKey } = req.body
@@ -173,6 +178,120 @@ const createCheckout = async (req, res) => {
             error: error.code || 'ERRO_CRIAR_CHECKOUT',
             message: error.message || 'Nao foi possivel iniciar o checkout agora.',
         })
+    }
+}
+
+const createPreferenceValidacao = async (req, res) => {
+    let codigoOferta = null;
+    let auth = null;
+    let codCasal = null;
+    let referenceEventId = null;
+
+    try {
+        const { offerId, planKey, email } = req.body || {};
+        codigoOferta = offerId || planKey;
+        auth = req.authContext;
+        codCasal = await getCodCasalFromAuth(auth);
+
+        if (!codigoOferta) {
+            return res.status(400).json({
+                error: "OFERTA_NAO_INFORMADA",
+                message: "Oferta nao informada para criar a preferencia de validacao.",
+            });
+        }
+
+        if (!codCasal) {
+            return res.status(400).json({
+                error: "CHECKOUT_SEM_CASAL",
+                message: "Finalize seu cadastro ou entre novamente antes de criar a preferencia.",
+            });
+        }
+
+        const oferta = await AssinaturaModel.getOfertaAtiva(codigoOferta);
+
+        if (!oferta) {
+            return res.status(404).json({
+                error: "OFERTA_INDISPONIVEL",
+                message: "Esta oferta nao esta disponivel agora.",
+            });
+        }
+
+        referenceEventId = await AssinaturaEventosModel.registrar({
+            evento: "mp_preference_validation_requested",
+            source: "app",
+            contexto: req.body?.contexto || "mercado_pago_validation",
+            offerId: oferta.codigo,
+            casal: codCasal,
+            usuario: auth?.id,
+            status: "processing",
+            metadata: { mercadoPagoEnv: MP_ENV },
+            req,
+        });
+
+        if (!referenceEventId) {
+            return res.status(500).json({
+                error: "REFERENCIA_INTERNA_NAO_REGISTRADA",
+                message: "Nao foi possivel registrar o ID interno antes de criar a preferencia.",
+            });
+        }
+
+        const preference = await AssinaturaModel.createCheckoutPreference(
+            oferta.codigo,
+            referenceEventId,
+            { email },
+        );
+
+        await AssinaturaEventosModel.registrar({
+            evento: "mp_preference_validation_created",
+            source: "backend",
+            contexto: req.body?.contexto || "mercado_pago_validation",
+            offerId: oferta.codigo,
+            casal: codCasal,
+            usuario: auth?.id,
+            status: "success",
+            metadata: {
+                mercadoPagoEnv: preference.mp_environment,
+                preferenceId: preference.id,
+                externalReference: preference.external_reference,
+                referenceEventId,
+                requestTraceId: preference.requestTraceId,
+            },
+            req,
+        });
+
+        return res.status(201).json({
+            message: "Preferencia Mercado Pago criada para validacao.",
+            preferenceId: preference.id,
+            externalReference: preference.external_reference,
+            mercadoPagoEnv: preference.mp_environment,
+            requestTraceId: preference.requestTraceId,
+        });
+    } catch (error) {
+        console.error("Erro ao criar preferencia de validacao Mercado Pago", error);
+
+        await AssinaturaEventosModel.registrar({
+            evento: "mp_preference_validation_failed",
+            source: "backend",
+            contexto: req.body?.contexto || "mercado_pago_validation",
+            offerId: codigoOferta,
+            casal: codCasal,
+            usuario: auth?.id,
+            status: error?.code || error?.error || "erro",
+            metadata: {
+                mercadoPagoEnv: error?.mercadoPagoEnv || MP_ENV,
+                requestTraceId: error?.requestTraceId,
+                referenceEventId,
+                message: error?.message,
+            },
+            req,
+        });
+
+        return res.status(error.status || 500).json({
+            error: error.code || error.error || "ERRO_CRIAR_PREFERENCIA_MP",
+            message: error.message || "Nao foi possivel criar a preferencia no Mercado Pago.",
+            mercadoPagoEnv: error?.mercadoPagoEnv || MP_ENV,
+            requestTraceId: error?.requestTraceId,
+        });
     }
 }
 
@@ -352,6 +471,29 @@ const getPagamentoAutorizadoMP = async (id) => {
     return await response.json();
 };
 
+const getPagamentoMP = async (id) => {
+    if (!MP_ACCESS_TOKEN) {
+        throw new Error("MP_ACCESS_TOKEN nao configurado");
+    }
+
+    const response = await fetch(
+        `https://api.mercadopago.com/v1/payments/${id}`,
+        {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+                "Content-Type": "application/json"
+            }
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error("Erro ao consultar pagamento no Mercado Pago");
+    }
+
+    return await response.json();
+};
+
 const mpWebHookHealth = (req, res) => {
     return res.status(200).json({
         ok: true,
@@ -399,6 +541,31 @@ const mpWebHook = async (req, res) => {
                     paymentStatus: authorizedPayment?.payment?.status,
                     paymentStatusDetail: authorizedPayment?.payment?.status_detail,
                     retryAttempt: authorizedPayment?.retry_attempt,
+                },
+                req,
+            });
+
+            return res.sendStatus(200);
+        }
+
+        if (type === "payment") {
+            const pagamento = await getPagamentoMP(data.id);
+            const externalReference = pagamento?.external_reference;
+
+            trackAssinaturaEvento({
+                evento: pagamento?.status === "approved"
+                    ? "preference_payment_approved"
+                    : "preference_payment_received",
+                source: "mercado_pago",
+                status: pagamento?.status,
+                metadata: {
+                    paymentId: pagamento?.id,
+                    paymentStatusDetail: pagamento?.status_detail,
+                    paymentMethodId: pagamento?.payment_method_id,
+                    preferenceId: pagamento?.preference_id,
+                    externalReference,
+                    preferenceInternalReference: getPreferenceInternalReference(externalReference),
+                    transactionAmount: pagamento?.transaction_amount,
                 },
                 req,
             });
@@ -585,4 +752,4 @@ const registrarEventoConversao = async (req, res) => {
     });
 }
 
-export default { createCheckout, createAssinatura, mpWebHook, mpWebHookHealth, getOfertas, cancelarAssinatura, registrarEventoConversao }
+export default { createCheckout, createPreferenceValidacao, createAssinatura, mpWebHook, mpWebHookHealth, getOfertas, cancelarAssinatura, registrarEventoConversao }
