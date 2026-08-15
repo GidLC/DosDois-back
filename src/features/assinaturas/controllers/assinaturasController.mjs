@@ -853,8 +853,6 @@ const asaasWebHook = async (req, res) => {
                     subscriptionId: payment.subscription,
                     localStatus: resultado.statusDB,
                     providerStatusDB: resultado.providerStatusDB,
-                    providerPaymentStatus: resultado.providerPaymentStatus,
-                    providerPaymentStatusFetched: resultado.providerPaymentStatusFetched,
                     matchStrategy: resultado.matchStrategy,
                     ambiguousFallback: resultado.ambiguousFallback,
                     asaasEnv: ASAAS_ENV,
@@ -876,8 +874,6 @@ const asaasWebHook = async (req, res) => {
                     paymentStatus: payment.status,
                     localStatus: resultado?.statusDB,
                     providerStatusDB: resultado?.providerStatusDB,
-                    providerPaymentStatus: resultado?.providerPaymentStatus,
-                    providerPaymentStatusFetched: resultado?.providerPaymentStatusFetched,
                     matchStrategy: resultado?.matchStrategy,
                     ambiguousFallback: resultado?.ambiguousFallback,
                     asaasEnv: ASAAS_ENV,
@@ -1041,84 +1037,6 @@ const cancelarAssinatura = async (req, res) => {
     }
 }
 
-const sincronizarPagamentoAsaas = async (req, res) => {
-    try {
-        const auth = req.authContext;
-        const paymentId = String(req.body?.paymentId || "").trim();
-        const subscriptionId = String(req.body?.subscriptionId || "").trim();
-
-        if (!auth?.cod_casal) {
-            return res.status(400).json({
-                error: "CASAL_NAO_IDENTIFICADO",
-                message: "Nao foi possivel identificar o casal autenticado.",
-            });
-        }
-
-        if (!paymentId || !subscriptionId) {
-            return res.status(400).json({
-                error: "ASAAS_SYNC_INVALIDA",
-                message: "Informe paymentId e subscriptionId para sincronizar o pagamento Asaas.",
-            });
-        }
-
-        const resultado = await AssinaturaModel.atualizarPagamentoAsaas(
-            { id: paymentId, subscription: subscriptionId },
-            "PAYMENT_STATUS_SYNC",
-        );
-
-        if (!resultado?.assinatura) {
-            return res.status(404).json({
-                error: "ASSINATURA_ASAAS_NAO_VINCULADA",
-                message: "Nao foi encontrada assinatura local para este pagamento Asaas.",
-            });
-        }
-
-        if (resultado.assinatura.casal !== auth.cod_casal) {
-            return res.status(403).json({
-                error: "ASSINATURA_DE_OUTRO_CASAL",
-                message: "Este pagamento nao pertence ao casal autenticado.",
-            });
-        }
-
-        trackAssinaturaEvento({
-            evento: "asaas_payment_sync",
-            source: "app",
-            status: resultado.statusDB,
-            casal: auth.cod_casal,
-            usuario: auth.id,
-            assinaturaId: resultado.assinatura.id,
-            metadata: {
-                paymentId,
-                subscriptionId,
-                providerPaymentStatus: resultado.providerPaymentStatus,
-                providerPaymentStatusFetched: resultado.providerPaymentStatusFetched,
-                matchStrategy: resultado.matchStrategy,
-            },
-            req,
-        });
-
-        return res.status(200).json({
-            message: "Pagamento Asaas sincronizado.",
-            status: resultado.statusDB,
-            providerPaymentStatus: resultado.providerPaymentStatus,
-            providerPaymentStatusFetched: resultado.providerPaymentStatusFetched,
-            assinaturaId: resultado.assinatura.id,
-        });
-    } catch (error) {
-        console.error("Erro ao sincronizar pagamento Asaas", {
-            code: error?.code,
-            status: error?.status,
-            message: error?.message,
-            asaasEnv: error?.asaasEnv || ASAAS_ENV,
-        });
-
-        return res.status(error.status || 500).json({
-            error: error.code || "ASAAS_SYNC_ERROR",
-            message: error.message || "Nao foi possivel sincronizar o pagamento Asaas.",
-        });
-    }
-}
-
 const registrarEventoConversao = async (req, res) => {
     const {
         event,
@@ -1161,4 +1079,4 @@ const registrarEventoConversao = async (req, res) => {
     });
 }
 
-export default { createCheckout, createPreferenceValidacao, createAssinatura, mpWebHook, mpWebHookHealth, asaasWebHook, asaasWebHookHealth, getOfertas, cancelarAssinatura, sincronizarPagamentoAsaas, registrarEventoConversao }
+export default { createCheckout, createPreferenceValidacao, createAssinatura, mpWebHook, mpWebHookHealth, asaasWebHook, asaasWebHookHealth, getOfertas, cancelarAssinatura, registrarEventoConversao }
