@@ -1141,6 +1141,8 @@ class AssinaturaModel {
         if (!assinatura) return null;
 
         const statusDB = statusAsaasSubscriptionToDb(subscriptionAtual.status);
+        const shouldKeepActive = assinatura.status === "ativa" && statusDB === "pendente";
+        const nextStatus = shouldKeepActive ? assinatura.status : statusDB;
 
         await queryAsync(`
             UPDATE assinaturas
@@ -1151,12 +1153,13 @@ class AssinaturaModel {
                 provider_status = ?,
                 updated_at = NOW()
             WHERE id = ?
-        `, [statusDB, subscriptionAtual.id, externalReference || null, subscriptionAtual.status, assinatura.id]);
+        `, [nextStatus, subscriptionAtual.id, externalReference || null, subscriptionAtual.status, assinatura.id]);
 
         return {
             assinatura,
             subscription: subscriptionAtual,
-            statusDB,
+            statusDB: nextStatus,
+            providerStatusDB: statusDB,
             matchStrategy: assinatura.provider_subscription_id === subscription.id
                 ? "provider_subscription_id"
                 : externalReference
@@ -1168,7 +1171,7 @@ class AssinaturaModel {
         };
     };
 
-    static atualizarPagamentoAsaas = async (payment) => {
+    static atualizarPagamentoAsaas = async (payment, event = null) => {
         const subscriptionId = payment?.subscription;
         const subscription = subscriptionId
             ? await getAsaasSubscription(subscriptionId).catch(() => null)
@@ -1188,8 +1191,12 @@ class AssinaturaModel {
             || fallbackRecente.assinatura;
         if (!assinatura) return null;
 
-        const statusDB = statusAsaasPaymentToDb(payment.status);
-        const shouldActivate = statusDB === "ativa";
+        const eventName = String(event || "").toUpperCase();
+        const providerPaymentStatus = String(payment.status || "").toUpperCase();
+        const statusDB = statusAsaasPaymentToDb(providerPaymentStatus);
+        const shouldActivate = ["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"].includes(eventName)
+            || ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"].includes(providerPaymentStatus);
+        const nextStatus = shouldActivate ? "ativa" : statusDB;
 
         if (shouldActivate) {
             const inicio = new Date();
@@ -1227,13 +1234,14 @@ class AssinaturaModel {
                     provider_status = ?,
                     updated_at = NOW()
                 WHERE id = ?
-            `, [statusDB, subscriptionId || null, externalReference || null, payment.id, payment.status, assinatura.id]);
+            `, [nextStatus, subscriptionId || null, externalReference || null, payment.id, payment.status, assinatura.id]);
         }
 
         return {
             assinatura,
             subscription,
-            statusDB,
+            statusDB: nextStatus,
+            providerStatusDB: statusDB,
             matchStrategy: assinatura.provider_subscription_id === subscriptionId
                 ? "provider_subscription_id"
                 : externalReference
