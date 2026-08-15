@@ -4,7 +4,7 @@ import { pool } from "../../../config/config.mjs";
 import separaData from "../../../data/SeparaData/SeparaData.mjs";
 import { MP_ACCESS_TOKEN, MP_ENV, MP_WEBHOOK_URL, getMercadoPagoPlanIdOverride } from "../mpToken.mjs";
 import { ASAAS_CHECKOUT_CANCEL_URL, ASAAS_CHECKOUT_EXPIRED_URL, ASAAS_CHECKOUT_SUCCESS_URL, ASAAS_ENV } from "../asaasConfig.mjs";
-import { createAsaasCheckout, deleteAsaasSubscription, getAsaasSubscription } from "../asaasClient.mjs";
+import { createAsaasCheckout, deleteAsaasSubscription, getAsaasPaymentStatus, getAsaasSubscription } from "../asaasClient.mjs";
 import { MP_PLANS } from "../utils/MP_PLANS.mjs";
 import { randomUUID } from "crypto";
 
@@ -1192,7 +1192,12 @@ class AssinaturaModel {
         if (!assinatura) return null;
 
         const eventName = String(event || "").toUpperCase();
-        const providerPaymentStatus = String(payment.status || "").toUpperCase();
+        const paymentStatusAtual = payment?.id
+            ? await getAsaasPaymentStatus(payment.id).catch(() => null)
+            : null;
+        const providerPaymentStatus = String(
+            paymentStatusAtual?.status || payment.status || "",
+        ).toUpperCase();
         const statusDB = statusAsaasPaymentToDb(providerPaymentStatus);
         const shouldActivate = ["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"].includes(eventName)
             || ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"].includes(providerPaymentStatus);
@@ -1242,6 +1247,8 @@ class AssinaturaModel {
             subscription,
             statusDB: nextStatus,
             providerStatusDB: statusDB,
+            providerPaymentStatus,
+            providerPaymentStatusFetched: Boolean(paymentStatusAtual?.status),
             matchStrategy: assinatura.provider_subscription_id === subscriptionId
                 ? "provider_subscription_id"
                 : externalReference

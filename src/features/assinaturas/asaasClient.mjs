@@ -89,6 +89,11 @@ export const getAsaasSubscription = (id, requestTraceId) =>
         requestTraceId,
     });
 
+export const getAsaasPaymentStatus = (id, requestTraceId) =>
+    asaasRequest(`/payments/${encodeURIComponent(id)}/status`, {
+        requestTraceId,
+    });
+
 export const deleteAsaasSubscription = (id, requestTraceId) =>
     asaasRequest(`/subscriptions/${encodeURIComponent(id)}`, {
         method: "DELETE",
