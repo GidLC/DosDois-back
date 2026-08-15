@@ -833,7 +833,7 @@ const asaasWebHook = async (req, res) => {
         });
 
         if (event?.startsWith?.("PAYMENT_") && payment?.id) {
-            const resultado = await AssinaturaModel.atualizarPagamentoAsaas(payment);
+            const resultado = await AssinaturaModel.atualizarPagamentoAsaas(payment, event);
 
             if (!resultado?.assinatura) {
                 console.warn("Webhook Asaas sem assinatura local vinculada", {
@@ -852,6 +852,7 @@ const asaasWebHook = async (req, res) => {
                     paymentId: payment.id,
                     subscriptionId: payment.subscription,
                     localStatus: resultado.statusDB,
+                    providerStatusDB: resultado.providerStatusDB,
                     matchStrategy: resultado.matchStrategy,
                     ambiguousFallback: resultado.ambiguousFallback,
                     asaasEnv: ASAAS_ENV,
@@ -872,6 +873,7 @@ const asaasWebHook = async (req, res) => {
                     subscriptionId: payment.subscription,
                     paymentStatus: payment.status,
                     localStatus: resultado?.statusDB,
+                    providerStatusDB: resultado?.providerStatusDB,
                     matchStrategy: resultado?.matchStrategy,
                     ambiguousFallback: resultado?.ambiguousFallback,
                     asaasEnv: ASAAS_ENV,
@@ -900,6 +902,7 @@ const asaasWebHook = async (req, res) => {
                     assinaturaId: resultado.assinatura.id,
                     subscriptionId: subscription.id,
                     localStatus: resultado.statusDB,
+                    providerStatusDB: resultado.providerStatusDB,
                     matchStrategy: resultado.matchStrategy,
                     ambiguousFallback: resultado.ambiguousFallback,
                     asaasEnv: ASAAS_ENV,
@@ -917,6 +920,7 @@ const asaasWebHook = async (req, res) => {
                     subscriptionId: subscription.id,
                     subscriptionStatus: subscription.status,
                     localStatus: resultado?.statusDB,
+                    providerStatusDB: resultado?.providerStatusDB,
                     matchStrategy: resultado?.matchStrategy,
                     ambiguousFallback: resultado?.ambiguousFallback,
                     asaasEnv: ASAAS_ENV,
