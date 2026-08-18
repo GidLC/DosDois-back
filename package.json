@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "excluir-usuario": "node src/data/scripts/excluirUsuario.mjs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
