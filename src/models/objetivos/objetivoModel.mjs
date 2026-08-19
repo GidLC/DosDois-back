@@ -7,7 +7,7 @@ class ObjetivoModel {
     static addObjetivo = async (descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone, callback) => {
         const query = 'INSERT INTO objetivo (descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone) VALUES (?,?,?,?,?,?,?,?)'
 
-        const objetivo = await new Promisse((resolve, reject) => {
+        const objetivo = await new Promise((resolve, reject) => {
             pool.query(query, [descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone], (err, results) => {
                 if (err) {
                     return callback(err, null)
@@ -103,7 +103,7 @@ class ObjetivoModel {
     static deleteObjetivo = async (id, casal, callback) => {
         const query = 'DELETE FROM objetivo WHERE id = ? AND casal = ?';
 
-        const rep = await new Promisse((resolve, reject) => {
+        const rep = await new Promise((resolve, reject) => {
             pool.query(query, [id, casal], (err, results) => {
                 if (err) {
                     return callback(err, null)
@@ -114,6 +114,8 @@ class ObjetivoModel {
         })
 
         await decrementaUso(casal, "objetivos")
+
+        return callback(null, rep)
     }
 
     static aporteValor = (objetivoId, valor, casal, callback) => {
