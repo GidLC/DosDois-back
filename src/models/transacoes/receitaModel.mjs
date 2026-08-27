@@ -36,10 +36,9 @@ class ReceitaModel {
 
                     promisses.push(
                         new Promise((resolve, reject) => {
-                            pool.query(query, [(repetir > 1) ? descricaoRep : descricao, valor, usuario, cod_casal, categoria, status, objData.dia, mesRep, anoRep, banco, tipo, tag, obs], (err, results) => {
-                                if (err) {
-                                    reject(err)
-                                }
+                            pool.query(query, [(repetir > 1) ? descricaoRep : descricao, valor, usuario, cod_casal, categoria, status, objData.dia, mesRep, anoRep, banco, tipo, tag, obs], async (err, results) => {
+                                if (err) return reject(err)
+
                                 resolve(results)
                             })
                         })
@@ -62,10 +61,8 @@ class ReceitaModel {
                     for (let mes = mesInicial; mes < 12; mes++) {
                         promisses.push(
                             new Promise((resolve, reject) => {
-                                pool.query(query, [id_uuid, descricao, valor, tipo, status, objData.dia, mes, ano, `${objData.ano}-${objData.mes}-${objData.dia}`, cod_casal, usuario, banco, categoria, tag, obs], (err, results) => {
-                                    if (err) {
-                                        reject(err)
-                                    }
+                                pool.query(query, [id_uuid, descricao, valor, tipo, status, objData.dia, mes, ano, `${objData.ano}-${objData.mes}-${objData.dia}`, cod_casal, usuario, banco, categoria, tag, obs], async (err, results) => {
+                                    if (err) return reject(err)
 
                                     resolve(results)
                                 })
@@ -113,12 +110,14 @@ class ReceitaModel {
                 })
             })
 
-            const queryCol = `SELECT rec.id, rec.descricao, rec.valor, rec.dia, rec.mes, rec.ano, rec.status, cat.nome AS nome_categoria, 
-            ic.ion_nome AS nome_icone, cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria FROM receita as rec
+            const queryCol = `SELECT rec.id, rec.descricao, rec.valor, rec.dia, rec.mes, rec.ano, rec.status, rec.usuario, rec.obs, cat.nome AS nome_categoria, 
+            ic.ion_nome AS nome_icone, cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria,
+            tags.id AS id_tag, tags.nome AS nome_tag FROM receita as rec
                 INNER JOIN categoria_tr AS cat ON cat.id = rec.categoria
                 INNER JOIN icones AS ic ON ic.id = cat.icone
                 INNER JOIN cor ON cor.id = cat.cor
                 INNER JOIN banco AS ba ON ba.id = rec.banco
+                LEFT JOIN tags ON tags.id = rec.tag
                     WHERE rec.casal = ? AND rec.mes = ? AND rec.ano = ? AND rec.tipo = 1`
             //Entende-se receitas coletivas como os ajustes de saldo dos bancos coletivos
             const receitasCol = await new Promise((resolve, reject) => {
@@ -177,9 +176,10 @@ class ReceitaModel {
             const tabela = (fixa == 0 || !fixa) ? 'receita' : 'receitas_fixas';
             const camposFixos = (fixa == 1) ? ', rec.id_fixo, rec.data_criacao' : '';
             const query = `SELECT rec.id, rec.descricao, rec.valor, rec.tipo, rec.dia, rec.mes, rec.ano, rec.status, rec.obs, cat.id AS id_categoria, cat.nome AS nome_categoria, 
-                        ba.id AS id_banco, ba.nome AS nome_banco${camposFixos} FROM ${tabela} AS rec
+                        ba.id AS id_banco, ba.nome AS nome_banco, tags.id AS id_tag, tags.nome AS nome_tag${camposFixos} FROM ${tabela} AS rec
                             INNER JOIN categoria_tr AS cat ON cat.id = rec.categoria
                             INNER JOIN banco AS ba ON ba.id = rec.banco
+                            LEFT JOIN tags ON tags.id = rec.tag
                                 WHERE rec.id = ? AND rec.usuario = ? AND rec.casal = ?`;
 
             pool.query(query, [id, usuario, casal], (err, results) => {
@@ -199,7 +199,7 @@ class ReceitaModel {
         const tabela = (fixa == 0 || !fixa) ? 'receita' : 'receitas_fixas';
         const query = `UPDATE ${tabela} SET descricao = ?, categoria = ?, valor = ?, dia = ?, mes = ?, ano = ?, tipo = ?, status = ?, tag = ?, obs = ?, banco = ? WHERE casal = ? AND id = ?`
         const objData = await SeparaData(data, true)
-        pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, casal, id], (err, results) => {
+        pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, casal, id], async (err, results) => {
             if (err) {
                 return callback(err, null)
             }
@@ -212,7 +212,7 @@ class ReceitaModel {
         const query = `UPDATE receitas_fixas SET descricao = ?, categoria = ?, valor = ?, dia = ?, tipo = ?, tag = ?, obs = ? WHERE casal = ? AND id_fixo = ? ${parseInt(pendentes) == 1 ? `AND status = 0` : ``}`;
         const objData = await SeparaData(data, true);
 
-        pool.query(query, [descricao, categoria, valor, objData.dia, tipo, tag, obs, casal, id_fixo], (err, results) => {
+        pool.query(query, [descricao, categoria, valor, objData.dia, tipo, tag, obs, casal, id_fixo], async (err, results) => {
             if (err) {
                 return callback(err, null);
             }
@@ -246,6 +246,74 @@ class ReceitaModel {
 
             return callback(null, results)
         })
+    }
+
+    static readReceitaFiltrada = async (filtros, callback) => {
+        try {
+            const {
+                usuario,
+                casal,
+                mes,
+                ano,
+                dataInicio,
+                dataFim,
+                tipo,
+                tag,
+                banco,
+                status,
+                descricao
+            } = filtros;
+            let query = `
+                SELECT rec.id, rec.descricao, rec.valor, rec.dia, rec.mes, rec.ano, rec.status, rec.obs, rec.usuario, rec.tipo,
+                       cat.nome AS nome_categoria, ic.ion_nome AS nome_icone,
+                       cor.codigo AS cod_cor, ba.nome AS nome_banco, cat.tipo AS tipo_categoria,
+                       tags_legacy.id AS id_tag, tags_legacy.nome AS nome_tag
+                FROM receita AS rec
+                INNER JOIN categoria_tr AS cat ON cat.id = rec.categoria
+                INNER JOIN icones AS ic ON ic.id = cat.icone
+                INNER JOIN cor ON cor.id = cat.cor
+                INNER JOIN banco AS ba ON ba.id = rec.banco
+                LEFT JOIN tags AS tags_legacy ON tags_legacy.id = rec.tag
+                WHERE rec.casal = ?
+            `;
+            const params = [casal];
+
+            if (tipo !== null && tipo !== undefined) {
+                query += " AND rec.tipo = ?";
+                params.push(tipo);
+                if (Number(tipo) === 0) {
+                    query += " AND rec.usuario = ?";
+                    params.push(usuario);
+                }
+            } else {
+                query += " AND ((rec.tipo = 0 AND rec.usuario = ?) OR rec.tipo = 1)";
+                params.push(usuario);
+            }
+
+            if (dataInicio && dataFim) {
+                query += " AND STR_TO_DATE(CONCAT(rec.dia, '/', rec.mes, '/', rec.ano), '%d/%m/%Y') BETWEEN ? AND ?";
+                params.push(dataInicio, dataFim);
+            } else if (ano && mes !== null && mes !== undefined) {
+                query += " AND rec.ano = ? AND rec.mes = ?";
+                params.push(ano, mes);
+            } else if (ano) {
+                query += " AND rec.ano = ?";
+                params.push(ano);
+            }
+
+            if (tag) { query += " AND rec.tag = ?"; params.push(tag); }
+
+            if (banco) { query += " AND rec.banco = ?"; params.push(banco); }
+            if (status !== null && status !== undefined) { query += " AND rec.status = ?"; params.push(status); }
+            if (descricao) { query += " AND rec.descricao LIKE ?"; params.push(`%${descricao}%`); }
+
+            query += " ORDER BY rec.ano, rec.mes, rec.dia";
+
+            const results = await pool.promise().query(query, params).then(([rows]) => rows);
+            return callback(null, results);
+        } catch (error) {
+            return callback(error, null);
+        }
     }
 
     static efetivaReceita = async (casal, receitaId, fixa, callback) => {

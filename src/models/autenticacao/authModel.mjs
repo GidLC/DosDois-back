@@ -22,6 +22,12 @@ const MAX_PROFILE_IMAGE_BYTES = Number(process.env.MAX_PROFILE_IMAGE_BYTES ?? 2 
 const ALLOWED_PROFILE_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
 const APP_URL = 'https://dosdoisapp.com.br';
 
+const criaValidadeToken = async (minutos = 30) => {
+  const validade = new Date(Date.now() + minutos * 60 * 1000).toISOString();
+  const v = await separaData(validade);
+  return `${v.ano}-${v.mes + 1}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`;
+};
+
 const safeIncrementaUso = async (casal, modulo, qtd = 1) => {
   try {
     await incrementaUso(casal, modulo, qtd);
@@ -30,7 +36,22 @@ const safeIncrementaUso = async (casal, modulo, qtd = 1) => {
   }
 };
 
-const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url }) => {
+const criaTokenValidacaoWhats = async (idUsuario) => {
+  const token = crypto.randomInt(100000, 1000000).toString();
+  const validade = await criaValidadeToken();
+
+  await new Promise((resolve, reject) => {
+    pool.query(
+      "INSERT INTO senha_temp (id_usuario, token, validade, uuid, tipo) VALUES (?, ?, ?, ?, ?)",
+      [idUsuario, token, validade, null, 'login'],
+      (err, results) => (err ? reject(err) : resolve(results))
+    );
+  });
+
+  return token;
+};
+
+const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, userId }) => {
   const notifications = [];
 
   if (email) {
@@ -38,10 +59,12 @@ const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url }
   }
 
   if (fone) {
-    notifications.push(enviaWhats(
-      fone,
-      `Bem-vindo ao app *DosDois*! Para que seu parceiro se vincule a você, acesse: ${url}`
-    ));
+    notifications.push(
+      criaTokenValidacaoWhats(userId).then((tokenWhats) => enviaWhats(
+        fone,
+        `Bem-vindo ao app *DosDois*! Seu código para validar o WhatsApp é: *${tokenWhats}*. Para convidar seu parceiro, envie este link: ${url}`
+      ))
+    );
   }
 
   const results = await Promise.allSettled(notifications);
@@ -279,7 +302,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
     );
   });
 
-  await sendCadastroNotifications({ email, fone, nome, codigoCasal, url });
+  await sendCadastroNotifications({ email, fone, nome, codigoCasal, url, userId });
 
   const [usuarioCriado] = await new Promise((resolve, reject) => {
     pool.query('SELECT * FROM usuario WHERE id = ?', [userId], (err, results) => {
@@ -423,10 +446,7 @@ class AuthModel {
         : crypto.randomInt(100000, 1000000).toString();
       const uuid = tipo === "senha" ? crypto.randomUUID() : null; //Só cria UUID no caso de trocar a senha
 
-      const data = new Date()
-      const validade = new Date(data.getTime() + 30 * 60 * 1000).toISOString();
-      const v = await separaData(validade)
-      const momento = `${v.ano}-${v.mes + 1}-${v.dia} ${v.hora}:${v.minuto}:${v.segundo}`
+      const momento = await criaValidadeToken()
 
       const queryUsuario = `SELECT * FROM usuario WHERE fone = ?`;
       const buscaUsuario = await new Promise((resolve, reject) => {

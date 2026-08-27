@@ -60,7 +60,7 @@ const EmailCadastro = (nome, codigoCasal, url) =>  {return `
     <main class="container">
         <h1>Confirmação de Cadastro</h1>
         <p>Olá, ${nome}</p>
-        <p>Você acaba de se cadastrar no OneCash, o melhor aplicativo de finanças familiar. O código casal seu e de
+        <p>Você acaba de se cadastrar no DosDois, o aplicativo para organizar a vida financeira do casal. O código casal seu e de
             seu(sua) parceiro(a) é o <b>${codigoCasal}</b>.
             Para se vincular basta seu parceiro acessar o link: ${url}
         </p>

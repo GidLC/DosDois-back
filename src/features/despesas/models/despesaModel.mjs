@@ -124,7 +124,6 @@ class DespesaModel {
                                 WHERE id = ?
                             `;
                                 pool.query(qUp, [valorReal, fatura.id]);
-
                                 resolve(result);
                             }
                         );
@@ -168,10 +167,8 @@ class DespesaModel {
 
                     promisses.push(
                         new Promise((resolve, reject) => {
-                            pool.query(query, [(repetir > 1) ? descricaoRep : descricao, valorReal, usuario, cod_casal, categoria, status, objData.dia, mesRep, anoRep, banco, tipo, tag, obs, uuid_parcela], (err, results) => {
-                                if (err) {
-                                    reject(err)
-                                }
+                            pool.query(query, [(repetir > 1) ? descricaoRep : descricao, valorReal, usuario, cod_casal, categoria, status, objData.dia, mesRep, anoRep, banco, tipo, tag, obs, uuid_parcela], async (err, results) => {
+                                if (err) return reject(err)
 
                                 resolve(results)
                             })
@@ -194,10 +191,8 @@ class DespesaModel {
                     for (let mes = mesInicial; mes < 12; mes++) {
                         promisses.push(
                             new Promise((resolve, reject) => {
-                                pool.query(query, [id_uuid, descricao, valor, tipo, 0, objData.dia, mes, ano, `${objData.ano}-${objData.mes}-${objData.dia}`, cod_casal, usuario, banco, categoria, tag, obs], (err, results) => {
-                                    if (err) {
-                                        reject(err);
-                                    }
+                                pool.query(query, [id_uuid, descricao, valor, tipo, 0, objData.dia, mes, ano, `${objData.ano}-${objData.mes}-${objData.dia}`, cod_casal, usuario, banco, categoria, tag, obs], async (err, results) => {
+                                    if (err) return reject(err);
 
                                     resolve(results);
                                 });
@@ -370,10 +365,8 @@ class DespesaModel {
 
             const editDespesa = async (objData) => {
                 return await new Promise((resolve, reject) => {
-                    pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, cartao, objData.id, casal, id], (err, results) => {
-                        if (err) {
-                            reject(err)
-                        }
+                    pool.query(query, [descricao, categoria, valor, objData.dia, objData.mes, objData.ano, tipo, status, tag, obs, banco, cartao, objData.id, casal, id], async (err, results) => {
+                        if (err) return reject(err)
 
                         resolve(results)
                     })
@@ -383,7 +376,7 @@ class DespesaModel {
 
             //Se a despesa atual ou anterior não tiver cartão retorna para o front
             if (!cartao && !old.cartao) {
-                const despesa = editDespesa(objData)
+                const despesa = await editDespesa(objData)
                 return callback(null, despesa)
             }
 
@@ -395,7 +388,7 @@ class DespesaModel {
                 objData
             )
 
-            editDespesa(newFatura)
+            await editDespesa(newFatura)
 
             return callback(null, 'OK')
         } catch (error) {
@@ -410,7 +403,7 @@ class DespesaModel {
         const query = `UPDATE despesas_fixas SET descricao = ?, categoria = ?, valor = ?, dia = ?, tipo = ?, tag = ?, obs = ? WHERE casal = ? AND id_fixo = ? ${parseInt(pendentes) ? `AND status = 0` : ``}`;
         const objData = await SeparaData(data, true);
 
-        pool.query(query, [descricao, categoria, valor, objData.dia, tipo, tag, obs, casal, id_fixo], (err, results) => {
+        pool.query(query, [descricao, categoria, valor, objData.dia, tipo, tag, obs, casal, id_fixo], async (err, results) => {
             if (err) {
                 return callback(err, null);
             }

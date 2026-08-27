@@ -56,14 +56,12 @@ const EmailParceiro = (nome, codigoCasal) => {
 
 <body>
     <header class="cabecalho">
-        <img src="https://raw.githubusercontent.com/GidLC/OneCash-back/master/src/public/logo_capa.png"
-            alt="capa do aplicativo com fundo azul" class="imagem" />
     </header>
 
     <main class="container">
         <h1>Confirmação de Cadastro</h1>
         <p>Olá</p>
-        <p><b>${nome}</b> acaba de se cadastrar no aplicativo OneCash e te colocou como parceiro dele.
+        <p><b>${nome}</b> acaba de se cadastrar no aplicativo DosDois e te colocou como parceiro(a).
             Seu código para se vincular a ele e criar o casal de vocês em nosso aplicativo é <b>${codigoCasal}</b>.</p>
         <p>Para se vincular basta baixar nosso aplicativo e ir em CADASTRE-SE - ATRIBUIÇÃO. Coloque lá o código recebido
             e realize o cadastro de sua própria conta.</p>
