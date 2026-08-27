@@ -1,6 +1,4 @@
 import nodemailer from 'nodemailer'
-import enviaEmail from '../../data/enviaEmail/enviaEmail.mjs'
-import EmailCadastro from '../../data/emails/Cadastro/EmailCadastro.mjs'
 
 const adminMail = process.env.SMTP_USER
 const adminPass = process.env.SMTP_PASS

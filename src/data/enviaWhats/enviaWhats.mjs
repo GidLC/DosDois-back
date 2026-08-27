@@ -4,12 +4,11 @@ import { apiWhatsURL } from "../apiConfig.mjs";
 const enviaWhats = async (num, msg) => {
     try {
         const response = await fetch(`${apiWhatsURL}/enviaWhats`, {
-            method: 'GET',
+            method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                num,
-                msg
+                'Content-Type': 'application/json'
             },
+            body: JSON.stringify({ num, msg }),
         });
 
         const data = await response.json();

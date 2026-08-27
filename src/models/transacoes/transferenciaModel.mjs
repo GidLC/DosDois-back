@@ -70,8 +70,10 @@ class TransfModel {
         }
     }
 
-    static readTransferencias = async (usuario, casal, mes, ano, callback) => {
+    static readTransferencias = async (usuario, casal, mes, ano, filtrosOrCallback, maybeCallback) => {
         try {
+            const filtros = typeof filtrosOrCallback === 'function' ? {} : filtrosOrCallback || {};
+            const callback = typeof filtrosOrCallback === 'function' ? filtrosOrCallback : maybeCallback;
             const query = `SELECT tr.id, tr.descricao, tr.valor, COALESCE(tr.usuario_criador, tr.usuario) AS usuario, tr.tipo AS tipoTransf, tr.dia, tr.mes, tr.ano, tr.obs, origem.nome AS origem_nome, destino.nome AS destino_nome, tr.relacao FROM transferencias AS tr 
                                 INNER JOIN banco origem ON tr.banco_origem = origem.id
                                 INNER JOIN banco destino ON tr.banco_destino = destino.id
@@ -80,7 +82,23 @@ class TransfModel {
                                         (tr.usuario_criador = ? AND tr.tipo = 0)
                                         OR ((tr.usuario_criador IS NULL OR tr.usuario_criador <> ?) AND tr.usuario = ?)
                                       )`
-            pool.query(query, [casal, mes, ano, usuario, usuario, usuario], (err, results) => {
+            let queryFinal = query;
+            const params = [casal, mes, ano, usuario, usuario, usuario];
+
+            if (filtros.dataInicio && filtros.dataFim) {
+                queryFinal = `SELECT tr.id, tr.descricao, tr.valor, COALESCE(tr.usuario_criador, tr.usuario) AS usuario, tr.tipo AS tipoTransf, tr.dia, tr.mes, tr.ano, tr.obs, origem.nome AS origem_nome, destino.nome AS destino_nome, tr.relacao FROM transferencias AS tr 
+                                INNER JOIN banco origem ON tr.banco_origem = origem.id
+                                INNER JOIN banco destino ON tr.banco_destino = destino.id
+                                    WHERE tr.casal = ?
+                                      AND STR_TO_DATE(CONCAT(tr.dia, '/', tr.mes, '/', tr.ano), '%d/%m/%Y') BETWEEN ? AND ?
+                                      AND (
+                                        (tr.usuario_criador = ? AND tr.tipo = 0)
+                                        OR ((tr.usuario_criador IS NULL OR tr.usuario_criador <> ?) AND tr.usuario = ?)
+                                      )`;
+                params.splice(1, 2, filtros.dataInicio, filtros.dataFim);
+            }
+
+            pool.query(queryFinal, params, (err, results) => {
                 if (err) {
                     return callback(err, null)
                 }

@@ -92,6 +92,33 @@ const editReceitaFixa = (req, res) => {
 
 }
 
+const readReceitaFiltrada = (req, res) => {
+  const casal = req.header('auth');
+  const usuario = req.header('usuario');
+  const { mes, ano, dataInicio, dataFim, tipo, tag, banco, status, descricao } = req.query;
+
+  ReceitaModel.readReceitaFiltrada({
+    usuario: Number(usuario) || null,
+    casal: casal || null,
+    mes: mes ? Number(mes) : null,
+    ano: ano ? Number(ano) : null,
+    dataInicio: dataInicio || null,
+    dataFim: dataFim || null,
+    tipo: tipo !== undefined ? Number(tipo) : null,
+    tag: tag ? Number(tag) : null,
+    banco: banco ? Number(banco) : null,
+    status: status !== undefined ? Number(status) : null,
+    descricao: descricao || null,
+  }, (err, results) => {
+    if (err) {
+      console.error('Erro ao encontrar as receitas filtradas', err);
+      return res.status(500).json({ error: `Erro ao buscar receitas filtradas. ${err}` });
+    }
+
+    res.status(200).json({ message: 'Receitas encontradas', results })
+  })
+}
+
 const deleteReceita = (req, res) => {
   const casal = req.header('auth');
   const usuario = req.header('usuario');
@@ -125,4 +152,4 @@ const efetivaReceita = (req, res) => {
 }
 
 
-export default { addReceita, readReceita, readReceitasCasal, deleteReceita, readReceitaID, editReceita, efetivaReceita, editReceitaFixa }
+export default { addReceita, readReceita, readReceitasCasal, readReceitaFiltrada, deleteReceita, readReceitaID, editReceita, efetivaReceita, editReceitaFixa }

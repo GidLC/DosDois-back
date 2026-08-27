@@ -7,6 +7,7 @@ receitaRouter.use(autenticarJWT)
 
 receitaRouter.post('/addReceita', receitaController.addReceita)
 receitaRouter.get('/readReceita', receitaController.readReceita)
+receitaRouter.get('/readReceitaFiltrada', receitaController.readReceitaFiltrada)
 receitaRouter.get('/readReceitasCasal', receitaController.readReceitasCasal)
 receitaRouter.delete('/deleteReceita', receitaController.deleteReceita)
 receitaRouter.get('/readReceitaID', receitaController.readReceitaID)

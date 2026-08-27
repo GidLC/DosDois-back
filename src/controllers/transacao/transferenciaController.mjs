@@ -17,10 +17,12 @@ const addTransferencia = (req, res) => {
 const readTransferencias = (req, res) => {
     const casal = req.header('auth');
     const usuario = req.header('usuario');
-    const mes = req.header('mes');
-    const ano = req.header('ano');
+    const mes = req.query.mes ?? req.header('mes');
+    const ano = req.query.ano ?? req.header('ano');
+    const dataInicio = req.query.dataInicio ?? null;
+    const dataFim = req.query.dataFim ?? null;
 
-    TransfModel.readTransferencias(usuario, casal, mes, ano, (err, results) => {
+    TransfModel.readTransferencias(usuario, casal, mes, ano, { dataInicio, dataFim }, (err, results) => {
         if (err) {
             return res.status(500).json({ error: 'Não foi possível listar as transferências' });
         }
