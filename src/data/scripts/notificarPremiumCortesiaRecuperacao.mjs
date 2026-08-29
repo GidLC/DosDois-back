@@ -14,9 +14,12 @@ const execute = args.includes("--execute");
 const ativarPremium = args.includes("--ativar-premium");
 const campanhaCodigo = getArg("--campanha", "PREMIUM_CORTESIA_CADASTRO_2026_08");
 const dias = Number(getArg("--dias", "14"));
+const inicio = getArg("--inicio");
+const fim = getArg("--fim");
 const meses = Number(getArg("--meses", "3"));
 const limit = Number(getArg("--limit", "0"));
 const url = getArg("--url", "https://web.dosdoisapp.com.br/conta?promo=premium-cortesia");
+const hasPeriodoFixo = Boolean(inicio || fim);
 
 const queryAsync = (sql, params = []) => pool.promise().query(sql, params).then(([rows]) => rows);
 
@@ -34,7 +37,25 @@ const formatDateBR = (date) => {
 };
 
 const assertValidArgs = () => {
-    if (!Number.isInteger(dias) || dias <= 0) {
+    if (hasPeriodoFixo && (!inicio || !fim)) {
+        throw new Error("Informe --inicio e --fim juntos no formato YYYY-MM-DD.");
+    }
+
+    if (hasPeriodoFixo) {
+        const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+        const inicioDate = new Date(`${inicio}T00:00:00`);
+        const fimDate = new Date(`${fim}T00:00:00`);
+
+        if (!datePattern.test(inicio) || !datePattern.test(fim) || Number.isNaN(inicioDate.getTime()) || Number.isNaN(fimDate.getTime())) {
+            throw new Error("Use --inicio e --fim no formato YYYY-MM-DD.");
+        }
+
+        if (inicioDate > fimDate) {
+            throw new Error("--inicio nao pode ser maior que --fim.");
+        }
+    }
+
+    if (!hasPeriodoFixo && (!Number.isInteger(dias) || dias <= 0)) {
         throw new Error("Informe --dias com um numero inteiro positivo.");
     }
 
@@ -80,9 +101,12 @@ const loadPremiumPlan = async () => {
 
 const loadUsuariosElegiveis = async (campanhaId) => {
     const limiteSql = Number.isInteger(limit) && limit > 0 ? " LIMIT ?" : "";
+    const dataSql = hasPeriodoFixo
+        ? "u.dt_criacao >= ? AND u.dt_criacao < DATE_ADD(?, INTERVAL 1 DAY)"
+        : "u.dt_criacao >= DATE_SUB(CURDATE(), INTERVAL ? DAY)";
     const params = Number.isInteger(limit) && limit > 0
-        ? [dias, campanhaId, limit]
-        : [dias, campanhaId];
+        ? [...(hasPeriodoFixo ? [inicio, fim] : [dias]), campanhaId, limit]
+        : [...(hasPeriodoFixo ? [inicio, fim] : [dias]), campanhaId];
 
     return queryAsync(
         `SELECT DISTINCT
@@ -97,7 +121,7 @@ const loadUsuariosElegiveis = async (campanhaId) => {
          FROM dosdois.usuario AS u
          WHERE u.email IS NOT NULL
            AND TRIM(u.email) <> ''
-           AND u.dt_criacao >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+           AND ${dataSql}
            AND NOT EXISTS (
                 SELECT 1
                 FROM dosdois.assinaturas AS ap
@@ -239,9 +263,12 @@ const main = async () => {
     const campanha = await loadCampanha();
     const planoPremium = await loadPremiumPlan();
     const usuarios = await loadUsuariosElegiveis(campanha.id);
+    const periodoTexto = hasPeriodoFixo
+        ? `periodo: ${inicio} ate ${fim}`
+        : `janela: ${dias} dia(s)`;
 
     console.log(`${execute ? "EXECUTE" : "DRY-RUN"}: ${usuarios.length} usuario(s) elegivel(is) para ${campanhaCodigo}.`);
-    console.log(`${ativarPremium ? "Ativacao Premium habilitada" : "Somente comunicacao"}; periodo: ${meses} mes(es); janela: ${dias} dia(s).`);
+    console.log(`${ativarPremium ? "Ativacao Premium habilitada" : "Somente comunicacao"}; cortesia: ${meses} mes(es); ${periodoTexto}.`);
 
     for (const usuario of usuarios) {
         const email = String(usuario.email || "").trim().toLowerCase();

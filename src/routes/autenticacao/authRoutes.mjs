@@ -7,6 +7,7 @@ import { loadPlan } from '../../middlewares/assinatura.mjs';
 authRouter.post('/cadastro', authController.cadastroUsuario)
 //authRouter.get('/buscaCadastro', authController.buscaCadastro)
 authRouter.put('/vincCadastro', authController.vincCadastro)
+authRouter.post('/vincCadastroGoogle', authController.vincCadastroGoogle)
 authRouter.post('/login', loadPlan, authController.loginUsuario)
 authRouter.get('/buscaCadEmail', authController.gerarToken)
 authRouter.put('/mudaSenha', authController.mudaSenha)

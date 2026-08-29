@@ -84,6 +84,90 @@ const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, 
   });
 };
 
+const vincularParceiro = async ({ nome, email, senha, cod_casal, fone, sexo, uuid, foto = null }) => {
+  const connection = await pool.promise().getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [convites] = await connection.query(
+      `SELECT c.cod_casal, c.usuario_princ, c.usuario_sec, u.nome AS nome_principal
+       FROM vinculos v
+       JOIN casal c ON c.cod_casal = v.casal
+       JOIN usuario u ON u.id = c.usuario_princ
+       WHERE v.casal = ?
+         AND v.uuid = ?
+         AND v.ativo = 1
+       LIMIT 1
+       FOR UPDATE`,
+      [cod_casal, uuid],
+    );
+
+    const convite = convites[0];
+    if (!convite) {
+      await connection.rollback();
+      throw new Error('Convite inválido ou expirado.');
+    }
+
+    if (convite.usuario_sec) {
+      await connection.rollback();
+      throw new Error('Este casal já possui parceiro vinculado.');
+    }
+
+    const senhaHash = senha ? await hashPassword(senha) : null;
+    const campos = ['nome', 'email', 'casal', 'dt_criacao', 'fone', 'sexo', 'foto', 'incompleto'];
+    const placeholders = ['?', '?', '?', 'NOW()', '?', '?', '?', '?'];
+    const valores = [nome, email, cod_casal, fone, sexo, foto, 0];
+
+    if (senhaHash) {
+      campos.splice(2, 0, 'senha');
+      placeholders.splice(2, 0, '?');
+      valores.splice(2, 0, senhaHash);
+    }
+
+    const [usuarioResult] = await connection.query(
+      `INSERT INTO usuario (${campos.join(', ')}) VALUES (${placeholders.join(', ')})`,
+      valores,
+    );
+
+    const userId = usuarioResult.insertId;
+
+    await connection.query(
+      'UPDATE casal SET usuario_sec = ? WHERE cod_casal = ? AND usuario_sec IS NULL',
+      [userId, cod_casal],
+    );
+
+    await connection.query(
+      'UPDATE vinculos SET ativo = 0 WHERE casal = ? AND uuid = ? AND ativo = 1',
+      [cod_casal, uuid],
+    );
+
+    await connection.query(
+      'INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Carteira", 0, 0, ?, ?)',
+      [cod_casal, userId],
+    );
+
+    await connection.commit();
+
+    if (fone) {
+      const [notification] = await Promise.allSettled([
+        enviaCodigoValidacaoWhats({ userId, fone, url: null })
+      ]);
+
+      if (notification.status === 'rejected') {
+        console.error('Parceiro vinculado, mas a notificação de WhatsApp falhou:', notification.reason);
+      }
+    }
+
+    return { userId, nome_principal: convite.nome_principal };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 const hasExpectedImageSignature = (buffer, ext) => {
   if (['jpg', 'jpeg'].includes(ext)) {
     return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
@@ -337,73 +421,29 @@ class AuthModel {
   //Realizar uma validação de vinculação mais segura, como solicitar o email do parceiro principal
   static vincCadastro = async (nome, email, senha, cod_casal, fone, sexo, uuid, callback) => {
     try {
-      const senhaHash = await hashPassword(senha);
-
-      //Insere usuário na tabela
-      const queryUsuario = `INSERT INTO usuario (nome, email, senha, casal, dt_criacao, fone, sexo) 
-                            VALUES (?, ?, ?, ?, NOW(), ?, ?)`;
-      const usuarioResult = await new Promise((resolve, reject) => {
-        pool.query(queryUsuario, [nome, email, senhaHash, cod_casal, fone, sexo], (err, results) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(results);
-        });
-      });
-
-      const userId = usuarioResult.insertId;
-
-      //Cria linha na tabela de casal
-      const queryCasal = 'UPDATE casal SET usuario_sec = ? WHERE cod_casal = ?';
-      const casalResult = await new Promise((resolve, reject) => {
-        pool.query(queryCasal, [userId, cod_casal], (err, results) => {
-          if (err) {
-            reject(err);
-          }
-          resolve(results);
-        });
-      });
-
-      const queryParceiro = `SELECT nome FROM usuario 
-                              WHERE casal = ?`
-      const parceiro = await new Promise((resolve, reject) => {
-        pool.query(queryParceiro, [cod_casal], (err, results) => {
-          if (err) {
-            reject(err)
-          }
-          resolve(results[0])
-        })
-      })
-
-      const queryVinculo = `UPDATE vinculos SET ativo = 0 WHERE casal = ? AND uuid = ?`
-
-      await new Promise((resolve, reject) => {
-        pool.query(queryVinculo, [cod_casal, uuid], (err, results) => {
-          if (err) {
-            reject(err)
-          }
-          resolve(results)
-        })
-      })
-
-      const queryBancos = `INSERT INTO banco (nome, tipo, saldo_inicial, casal, usuario) VALUES ("Carteira", 0, 0, ?, ?);`
-
-      const queries = queryBancos.split(';').filter(query => query.trim() !== '');
-      await Promise.all(queries.map((query) => {
-        return new Promise((resolve, reject) => {
-          pool.query(query, [cod_casal, userId], (err, results) => {
-            if (err) {
-              reject(err);
-            }
-            resolve(results);
-          });
-        });
-      }));
-
-      enviaWhats(fone, `Você acaba de se vincular como parceira(o) de ${parceiro.nome} no aplicativo *DosDois*. Aproveitem a aplicação e sucesso`)
-      return callback(null, casalResult);
+      const result = await vincularParceiro({ nome, email, senha, cod_casal, fone, sexo, uuid });
+      return callback(null, result);
     } catch (error) {
       console.error(`Não foi possível vincular o cadastro. ${error}`)
+      return callback(error, null)
+    }
+  }
+
+  static vincCadastroGoogle = async (nome, email, foto, cod_casal, fone, sexo, uuid, callback) => {
+    try {
+      const result = await vincularParceiro({ nome, email, senha: null, cod_casal, fone, sexo, uuid, foto });
+
+      const [usuarioCriado] = await new Promise((resolve, reject) => {
+        pool.query('SELECT * FROM usuario WHERE id = ?', [result.userId], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
+        });
+      });
+
+      const authResult = await getUserData(usuarioCriado, null);
+      return callback(null, authResult);
+    } catch (error) {
+      console.error(`Não foi possível vincular o cadastro Google. ${error}`)
       return callback(error, null)
     }
   }
