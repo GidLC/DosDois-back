@@ -70,6 +70,41 @@ const vincCadastro = (req, res) => {
   });
 };
 
+const vincCadastroGoogle = async (req, res) => {
+  try {
+    const { tokenGoogle, cod_casal, fone, sexo, uuid } = req.body;
+
+    if (!tokenGoogle || !cod_casal || !uuid) {
+      return res.status(400).json({ error: 'Convite ou autenticação Google inválidos.' });
+    }
+
+    const ticket = await client.verifyIdToken({
+      idToken: tokenGoogle,
+      audience: "948441988435-1jfcovgkbnmckon47bvuntfkhhf3nts7.apps.googleusercontent.com",
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name, picture } = payload;
+
+    AuthModel.vincCadastroGoogle(name, email, picture, cod_casal, fone, sexo, uuid, (err, resultado) => {
+      if (err) {
+        console.error('Erro ao vincular usuário via Google:', err);
+        const duplicate = err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062;
+        return res.status(duplicate ? 409 : 500).json({
+          error: duplicate
+            ? 'Esse e-mail ou celular já está cadastrado.'
+            : `Não foi possível vincular o cadastro. ${err?.message || err}`,
+        });
+      }
+
+      res.status(200).json({ message: 'Usuário vinculado com sucesso', resultado });
+    });
+  } catch (error) {
+    console.error("Erro ao validar token do Google para vínculo:", error);
+    res.status(400).json({ message: "Token do Google inválido ou expirado" });
+  }
+};
+
 //Sem autenticação
 const gerarToken = (req, res) => {
   const fone = req.header('fone');
@@ -242,7 +277,7 @@ const loginGoogle = async (req, res) => {
 };
 
 export default {
-  cadastroUsuario, loginUsuario, vincCadastro, gerarToken, validaToken,
+  cadastroUsuario, loginUsuario, vincCadastro, vincCadastroGoogle, gerarToken, validaToken,
   mudaSenha, editUser, validaVinculo, getPerfil, verificaWhats, atualizaUsuario, concluiOnboarding, loginGoogle
 }
 
