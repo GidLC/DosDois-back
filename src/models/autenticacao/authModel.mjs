@@ -443,6 +443,7 @@ class AuthModel {
   static vincCadastroGoogle = async (nome, email, foto, cod_casal, uuid, callback) => {
     try {
       const result = await vincularParceiro({ nome, email, senha: null, cod_casal, uuid, foto, incompleto: 1 });
+      await updateLastAccess(result.userId);
 
       const [usuarioCriado] = await new Promise((resolve, reject) => {
         pool.query('SELECT * FROM usuario WHERE id = ?', [result.userId], (err, results) => {
@@ -938,12 +939,14 @@ class AuthModel {
 
       if (rows.length > 0) {
         const user = rows[0];
+        await updateLastAccess(user.id);
         const { token, userData } = await getUserData(user, null, plano);
         return callback(null, { token, userData });
       }
 
       // Caso o usuário não exista, cria com base no fluxo padrão
       const novoUsuario = await criarUsuarioBase({ nome, email, fone: null, sexo: null, senha: null, foto });
+      await updateLastAccess(novoUsuario.id);
       const { token, userData } = await getUserData(novoUsuario, null, plano);
 
       return callback(null, { token, userData });
