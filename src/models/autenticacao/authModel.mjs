@@ -51,6 +51,18 @@ const criaTokenValidacaoWhats = async (idUsuario) => {
   return token;
 };
 
+const enviaCodigoValidacaoWhats = async ({ userId, fone, url }) => {
+  const tokenWhats = await criaTokenValidacaoWhats(userId);
+  const conviteParceiro = url
+    ? ` Para convidar seu parceiro, envie este link: ${url}`
+    : '';
+
+  return enviaWhats(
+    fone,
+    `Bem-vindo ao app *DosDois*! Seu código para validar o WhatsApp é: *${tokenWhats}*.${conviteParceiro}`
+  );
+};
+
 const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, userId }) => {
   const notifications = [];
 
@@ -60,10 +72,7 @@ const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, 
 
   if (fone) {
     notifications.push(
-      criaTokenValidacaoWhats(userId).then((tokenWhats) => enviaWhats(
-        fone,
-        `Bem-vindo ao app *DosDois*! Seu código para validar o WhatsApp é: *${tokenWhats}*. Para convidar seu parceiro, envie este link: ${url}`
-      ))
+      enviaCodigoValidacaoWhats({ userId, fone, url })
     );
   }
 
@@ -627,6 +636,21 @@ class AuthModel {
     const atualizaSenha = Boolean(senha)
     const senhaHash = atualizaSenha && await hashPassword(senha);
 
+    let usuarioAntes = null;
+
+    try {
+      [usuarioAntes] = await new Promise((resolve, reject) => {
+        pool.query('SELECT id, casal, incompleto, whats_verificado FROM usuario WHERE id = ?', [id], (err, results) => {
+          if (err) reject(err);
+          else resolve(results);
+        });
+      });
+    } catch (error) {
+      return callback(error, null);
+    }
+
+    if (!usuarioAntes) return callback('Usuário não encontrado', null);
+
     let caminhoFoto = null;
 
     if (foto) {
@@ -697,6 +721,24 @@ class AuthModel {
         });
 
         if (!usuarioAtualizado) return callback('Usuário não encontrado', null);
+
+        const concluiuCadastroGoogle = usuarioAntes.incompleto == 1 && usuarioAtualizado.incompleto == 0;
+        const deveEnviarWhatsCadastro = concluiuCadastroGoogle && fone && usuarioAtualizado.whats_verificado == 0;
+
+        if (deveEnviarWhatsCadastro) {
+          try {
+            const url = await getActiveInviteLink(usuarioAtualizado.casal);
+            const [notification] = await Promise.allSettled([
+              enviaCodigoValidacaoWhats({ userId: usuarioAtualizado.id, fone, url })
+            ]);
+
+            if (notification.status === 'rejected') {
+              console.error('Cadastro Google concluído, mas a notificação de WhatsApp falhou:', notification.reason);
+            }
+          } catch (error) {
+            console.error('Cadastro Google concluído, mas não foi possível preparar a notificação de WhatsApp:', error);
+          }
+        }
 
         const result = await getUserData(usuarioAtualizado, null);
         return callback(null, result)

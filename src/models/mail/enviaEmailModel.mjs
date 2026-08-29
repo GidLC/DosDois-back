@@ -7,7 +7,6 @@ const mailPort = Number(process.env.SMTP_PORT ?? 587)
 
 class enviaEmailModel {
     static enviaEmail = async (destinatario, assunto, conteudo, callback) => {
-        await enviaEmail(destinatario, "E-mail teste", EmailCadastro("Gideone", "df56ed"))
         try {
             if (!adminMail || !adminPass) {
                 return callback('SMTP não configurado', null)
