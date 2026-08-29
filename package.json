@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "excluir-usuario": "node src/data/scripts/excluirUsuario.mjs",
+    "notificar-premium-cortesia": "node src/data/scripts/notificarPremiumCortesiaRecuperacao.mjs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",

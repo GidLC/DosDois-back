@@ -352,6 +352,14 @@ const rollback = (connection) =>
 const isAssinaturaCorrente = (assinatura) => {
     if (!assinatura) return false;
     if (String(assinatura.plano_codigo || assinatura.codigo || '').toLowerCase() === 'free') return false;
+    if (assinatura.fim) {
+        const fim = new Date(assinatura.fim);
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        if (!Number.isNaN(fim.getTime()) && fim < hoje) return false;
+    }
+
     if (["ativa", "pendente"].includes(assinatura.status)) return true;
     if (assinatura.status !== "criando") return false;
 
@@ -416,6 +424,7 @@ class AssinaturaModel {
                 a.status IN ('ativa', 'pendente')
                 OR (a.status = 'criando' AND a.updated_at >= DATE_SUB(NOW(), INTERVAL 20 MINUTE))
               )
+              AND (a.fim IS NULL OR a.fim >= CURDATE())
             LIMIT 1
         `, [casal])
 

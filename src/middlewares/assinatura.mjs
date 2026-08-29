@@ -145,6 +145,7 @@ export const loadPlan = async (req, res, next) => {
     JOIN planos p ON p.id = a.plano_id
     WHERE a.casal = ?
       AND a.status = 'ativa'
+      AND (a.fim IS NULL OR a.fim >= CURDATE())
     ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
     LIMIT 1
   `, [auth]);
@@ -157,6 +158,7 @@ export const loadPlan = async (req, res, next) => {
     JOIN planos p ON p.id = a.plano_id
     WHERE a.casal = ?
       AND a.status = 'ativa'
+      AND (a.fim IS NULL OR a.fim >= CURDATE())
     ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
     LIMIT 1
   `, [auth]);
@@ -178,6 +180,7 @@ export const loadPlanFunction = async (auth) => {
     JOIN planos p ON p.id = a.plano_id
     WHERE a.casal = ?
       AND a.status = 'ativa'
+      AND (a.fim IS NULL OR a.fim >= CURDATE())
     ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
     LIMIT 1
   `, [auth]);
@@ -190,6 +193,7 @@ export const loadPlanFunction = async (auth) => {
     JOIN planos p ON p.id = a.plano_id
     WHERE a.casal = ?
       AND a.status = 'ativa'
+      AND (a.fim IS NULL OR a.fim >= CURDATE())
     ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
     LIMIT 1
   `, [auth]);
