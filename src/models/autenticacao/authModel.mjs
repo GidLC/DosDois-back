@@ -90,22 +90,35 @@ const vincularParceiro = async ({ nome, email, senha, cod_casal, fone = null, se
   try {
     await connection.beginTransaction();
 
-    const [convites] = await connection.query(
-      `SELECT c.cod_casal, c.usuario_princ, c.usuario_sec, u.nome AS nome_principal
-       FROM vinculos v
-       JOIN casal c ON c.cod_casal = v.casal
-       JOIN usuario u ON u.id = c.usuario_princ
-       WHERE v.casal = ?
-         AND v.uuid = ?
-         AND v.ativo = 1
+    const [convitesAtivos] = await connection.query(
+      `SELECT casal
+       FROM vinculos
+       WHERE casal = ?
+         AND uuid = ?
+         AND ativo = 1
        LIMIT 1
        FOR UPDATE`,
       [cod_casal, uuid],
     );
 
-    const convite = convites[0];
-    if (!convite) {
+    const conviteAtivo = convitesAtivos[0];
+    if (!conviteAtivo) {
       throw new Error('Convite inválido ou expirado.');
+    }
+
+    const [casais] = await connection.query(
+      `SELECT c.cod_casal, c.usuario_princ, c.usuario_sec, u.nome AS nome_principal
+       FROM casal c
+       JOIN usuario u ON u.id = c.usuario_princ
+       WHERE c.cod_casal = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [cod_casal],
+    );
+
+    const convite = casais[0];
+    if (!convite) {
+      throw new Error('Casal não encontrado para este convite.');
     }
 
     if (convite.usuario_sec) {
