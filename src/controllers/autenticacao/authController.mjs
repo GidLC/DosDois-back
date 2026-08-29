@@ -72,7 +72,7 @@ const vincCadastro = (req, res) => {
 
 const vincCadastroGoogle = async (req, res) => {
   try {
-    const { tokenGoogle, cod_casal, fone, sexo, uuid } = req.body;
+    const { tokenGoogle, cod_casal, uuid } = req.body;
 
     if (!tokenGoogle || !cod_casal || !uuid) {
       return res.status(400).json({ error: 'Convite ou autenticação Google inválidos.' });
@@ -86,7 +86,7 @@ const vincCadastroGoogle = async (req, res) => {
     const payload = ticket.getPayload();
     const { email, name, picture } = payload;
 
-    AuthModel.vincCadastroGoogle(name, email, picture, cod_casal, fone, sexo, uuid, (err, resultado) => {
+    AuthModel.vincCadastroGoogle(name, email, picture, cod_casal, uuid, (err, resultado) => {
       if (err) {
         console.error('Erro ao vincular usuário via Google:', err);
         const duplicate = err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062;

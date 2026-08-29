@@ -84,7 +84,7 @@ const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, 
   });
 };
 
-const vincularParceiro = async ({ nome, email, senha, cod_casal, fone, sexo, uuid, foto = null }) => {
+const vincularParceiro = async ({ nome, email, senha, cod_casal, fone = null, sexo = null, uuid, foto = null, incompleto = 0 }) => {
   const connection = await pool.promise().getConnection();
 
   try {
@@ -105,19 +105,17 @@ const vincularParceiro = async ({ nome, email, senha, cod_casal, fone, sexo, uui
 
     const convite = convites[0];
     if (!convite) {
-      await connection.rollback();
       throw new Error('Convite inválido ou expirado.');
     }
 
     if (convite.usuario_sec) {
-      await connection.rollback();
       throw new Error('Este casal já possui parceiro vinculado.');
     }
 
     const senhaHash = senha ? await hashPassword(senha) : null;
     const campos = ['nome', 'email', 'casal', 'dt_criacao', 'fone', 'sexo', 'foto', 'incompleto'];
     const placeholders = ['?', '?', '?', 'NOW()', '?', '?', '?', '?'];
-    const valores = [nome, email, cod_casal, fone, sexo, foto, 0];
+    const valores = [nome, email, cod_casal, fone, sexo, foto, incompleto ? 1 : 0];
 
     if (senhaHash) {
       campos.splice(2, 0, 'senha');
@@ -149,7 +147,7 @@ const vincularParceiro = async ({ nome, email, senha, cod_casal, fone, sexo, uui
 
     await connection.commit();
 
-    if (fone) {
+    if (fone && !incompleto) {
       const [notification] = await Promise.allSettled([
         enviaCodigoValidacaoWhats({ userId, fone, url: null })
       ]);
@@ -429,9 +427,9 @@ class AuthModel {
     }
   }
 
-  static vincCadastroGoogle = async (nome, email, foto, cod_casal, fone, sexo, uuid, callback) => {
+  static vincCadastroGoogle = async (nome, email, foto, cod_casal, uuid, callback) => {
     try {
-      const result = await vincularParceiro({ nome, email, senha: null, cod_casal, fone, sexo, uuid, foto });
+      const result = await vincularParceiro({ nome, email, senha: null, cod_casal, uuid, foto, incompleto: 1 });
 
       const [usuarioCriado] = await new Promise((resolve, reject) => {
         pool.query('SELECT * FROM usuario WHERE id = ?', [result.userId], (err, results) => {
