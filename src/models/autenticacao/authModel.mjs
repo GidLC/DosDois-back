@@ -20,7 +20,7 @@ import { hashPassword, verifyPassword } from "../../data/security/passwordHash.m
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MAX_PROFILE_IMAGE_BYTES = Number(process.env.MAX_PROFILE_IMAGE_BYTES ?? 2 * 1024 * 1024);
 const ALLOWED_PROFILE_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp']);
-const APP_URL = 'https://dosdoisapp.com.br';
+const APP_WEB_URL = String(process.env.APP_WEB_URL || 'https://web.dosdoisapp.com.br').replace(/\/+$/, '');
 
 const criaValidadeToken = async (minutos = 30) => {
   const validade = new Date(Date.now() + minutos * 60 * 1000).toISOString();
@@ -200,7 +200,7 @@ const getActiveInviteLink = async (codCasal) => {
   });
 
   return vinculo?.uuid
-    ? `${APP_URL}/atribuicao/${codCasal}/${vinculo.uuid}`
+    ? `${APP_WEB_URL}/atribuicao/${codCasal}/${vinculo.uuid}`
     : null;
 };
 
@@ -385,7 +385,7 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
 
   // Cria vínculo e envia notificações
   const uuid = crypto.randomUUID();
-  const url = `${APP_URL}/atribuicao/${codigoCasal}/${uuid}`;
+  const url = `${APP_WEB_URL}/atribuicao/${codigoCasal}/${uuid}`;
 
   await new Promise((resolve, reject) => {
     pool.query(
