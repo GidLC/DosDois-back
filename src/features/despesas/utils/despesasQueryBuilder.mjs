@@ -89,7 +89,6 @@ export const despesasQueryBuilder = ({
         query += `
             AND NOT (
                 LOWER(des.descricao) LIKE 'adiantamento de fatura%'
-                OR LOWER(des.descricao) LIKE 'pagamento da fatura%'
             )
         `;
     }

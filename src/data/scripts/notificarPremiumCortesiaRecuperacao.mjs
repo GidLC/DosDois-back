@@ -126,7 +126,7 @@ const loadUsuariosElegiveis = async (campanhaId) => {
                 SELECT 1
                 FROM dosdois.assinaturas AS ap
                 JOIN dosdois.planos AS pp ON pp.id = ap.plano_id
-                WHERE ap.casal = u.casal
+                WHERE ap.casal COLLATE utf8mb4_general_ci = u.casal COLLATE utf8mb4_general_ci
                   AND ap.status = 'ativa'
                   AND LOWER(pp.codigo) <> 'free'
                   AND (ap.fim IS NULL OR ap.fim >= CURDATE())

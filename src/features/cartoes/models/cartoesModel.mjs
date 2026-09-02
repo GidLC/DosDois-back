@@ -2,8 +2,6 @@
 import separaData from "../../../data/SeparaData/SeparaData.mjs"
 import { queryAsync } from "../../../data/queryAsync/queryAsync.mjs"
 import { incrementaUso } from "../../assinaturas/utils/incrementaUso.mjs"
-import DespesaModel from "../../despesas/models/despesaModel.mjs"
-import { despesasQueryBuilder } from "../../despesas/utils/despesasQueryBuilder.mjs"
 import { calcLimiteDisp } from "../utils/calcLimiteDisp.mjs"
 
 const data = new Date()
@@ -179,62 +177,128 @@ class CartoesModel {
     static pagarFatura = async (idFatura, callback) => {
         try {
             const data = new Date()
+            const dataBR = await separaData(data)
 
-            const queryDespesas = `SELECT * FROM despesa WHERE fatura = ?`
-            const despesas = await queryAsync(queryDespesas, [idFatura])
+            const adicionaDespesaDireta = async ({
+                descricao,
+                valor,
+                usuario,
+                casal,
+                categoria,
+                status,
+                dia,
+                mes,
+                ano,
+                banco,
+                tipo,
+                obs,
+                cartao = null,
+                fatura = null
+            }) => {
+                const query = `
+                    INSERT INTO despesa(
+                        descricao, valor, usuario, casal, categoria, status,
+                        dia, mes, ano, banco, tipo, tag, obs, cartao, fatura, id_parcela
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                `
 
-            //Efetiva as despesas
-            for (const despesa of despesas) {
-                DespesaModel.efetivaDespesa(
-                    despesa.casal,
-                    despesa.id,
-                    0, (err, results) => {
-                        if (err) {
-                            console.error(`Não foi possível efetivar a despesa ${despesa.descricao}. ${err}`)
-                        }
-                    }
-                )
+                return queryAsync(query, [
+                    descricao,
+                    valor,
+                    usuario,
+                    casal,
+                    categoria,
+                    status,
+                    dia,
+                    mes,
+                    ano,
+                    banco,
+                    tipo,
+                    null,
+                    obs,
+                    cartao,
+                    fatura,
+                    null
+                ])
             }
 
             //Busca dados da fatura
             const queryFatura = `SELECT * FROM cartao_faturas WHERE id = ?`
             const [fatura] = await queryAsync(queryFatura, [idFatura])
 
+            if (!fatura) {
+                return callback('Fatura nao encontrada', null)
+            }
+
+            if (fatura.status === 'paga') {
+                return callback('Fatura ja esta paga', null)
+            }
+
             //Busca dados do cartão
             const queryCartao = `SELECT * FROM cartoes WHERE id_cartao = ?`
             const [cartao] = await queryAsync(queryCartao, [fatura.cartao_id])
 
+            if (!cartao) {
+                return callback('Cartao da fatura nao encontrado', null)
+            }
+
             //Busca categoria de ajuste
             const queryCategoria = `SELECT * FROM categoria_tr WHERE casal = ? AND tipo = 0 AND cat_sistema = 1`
-            const [categoria] = await queryAsync(queryCategoria, [despesas[0].casal])
+            const [categoria] = await queryAsync(queryCategoria, [cartao.casal])
 
-            //Caso o cartão esteja disponível para o parceiro a despesa será coletiva, caso contrário será individual
-            const tipo = (cartao.disp == 1) ? 0 : 1
-
-            //Registrar despesa e "contra despesa" do pagamento da fatura
-            for (let i = 0; i < 2; i++) {
-                DespesaModel.addDespesa(
-                    `Pagamento da fatura ${cartao.nome}`,
-                    (i == 0) ? fatura.total : fatura.total * -1,
-                    cartao.usuario,
-                    despesas[0].casal,
-                    categoria.id,
-                    1,
-                    data,
-                    cartao.banco,
-                    tipo,
-                    0,
-                    null,
-                    `Despesa criada automaticamente para registrar pagamento da fatura`,
-                    1,
-                    1,
-                    null, (err, results) => {
-                        if (err) {
-                            console.error(`Não foi possível registrar a despesa de pagamento da fatura`)
-                        }
-                    }
-                )
+            if (!categoria) {
+                return callback('Categoria de ajuste nao encontrada', null)
             }
+
+            if (!cartao.banco) {
+                return callback('Cartao sem banco de pagamento definido', null)
+            }
+
+            // Cartao compartilhado ainda nao esta ativo; fatura pertence ao dono do cartao.
+            const tipo = 0
+            const descricao = `Pagamento da fatura ${cartao.nome}`
+            const obs = 'Despesa criada automaticamente para registrar pagamento da fatura'
+            const valorPagamento = Math.abs(Number(fatura.total || 0))
+
+            if (valorPagamento === 0) {
+                return callback('Fatura sem valor para pagamento', null)
+            }
+
+            await queryAsync(
+                'UPDATE despesa SET status = 1, banco = ?, tipo = ? WHERE fatura = ? AND cartao = ?',
+                [cartao.banco, tipo, fatura.id, cartao.id_cartao]
+            )
+
+            // Registra o pagamento para controle da lista de despesas, com efeito liquido zero no saldo.
+            await adicionaDespesaDireta({
+                descricao,
+                valor: valorPagamento,
+                usuario: cartao.usuario,
+                casal: cartao.casal,
+                categoria: categoria.id,
+                status: 1,
+                dia: dataBR.dia,
+                mes: dataBR.mes,
+                ano: dataBR.ano,
+                banco: cartao.banco,
+                tipo,
+                obs
+            })
+
+            await adicionaDespesaDireta({
+                descricao,
+                valor: valorPagamento * -1,
+                usuario: cartao.usuario,
+                casal: cartao.casal,
+                categoria: categoria.id,
+                status: 1,
+                dia: dataBR.dia,
+                mes: dataBR.mes,
+                ano: dataBR.ano,
+                banco: cartao.banco,
+                tipo,
+                obs
+            })
 
             //Definir fatura como paga
             const queryPag = `UPDATE cartao_faturas SET status = 'paga' WHERE id = ?`
