@@ -1,5 +1,5 @@
 import PremiumCortesiaRecuperacao from "../emails/Campanhas/PremiumCortesiaRecuperacao.mjs";
-import enviaEmailModel from "../../models/mail/enviaEmailModel.mjs";
+import enviaEmailApi from "../enviaEmail/enviaEmail.mjs";
 
 const args = process.argv.slice(2);
 
@@ -37,12 +37,20 @@ const queryAsync = async (sql, params = []) => {
     return dbPool.promise().query(sql, params).then(([rows]) => rows);
 };
 
-const enviarEmail = (destinatario, assunto, conteudo) => new Promise((resolve, reject) => {
-    enviaEmailModel.enviaEmail(destinatario, assunto, conteudo, (err, result) => {
-        if (err) return reject(err);
-        return resolve(result);
-    });
-});
+const enviarEmail = async (destinatario, assunto, conteudo) => {
+    const result = await enviaEmailApi(destinatario, assunto, conteudo);
+
+    if (
+        typeof result === "string" ||
+        result?.success === false ||
+        result?.error ||
+        result?.erro
+    ) {
+        throw new Error(typeof result === "string" ? result : JSON.stringify(result));
+    }
+
+    return result;
+};
 
 const formatDateBR = (date) => {
     const parsed = date instanceof Date ? date : new Date(date);
