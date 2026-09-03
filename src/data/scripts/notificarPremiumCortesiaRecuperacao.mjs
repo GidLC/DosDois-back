@@ -1,4 +1,3 @@
-import { pool } from "../../config/config.mjs";
 import PremiumCortesiaRecuperacao from "../emails/Campanhas/PremiumCortesiaRecuperacao.mjs";
 import enviaEmailModel from "../../models/mail/enviaEmailModel.mjs";
 
@@ -19,9 +18,24 @@ const fim = getArg("--fim");
 const meses = Number(getArg("--meses", "3"));
 const limit = Number(getArg("--limit", "0"));
 const url = getArg("--url", "https://web.dosdoisapp.com.br/conta?promo=premium-cortesia");
+const testeEmail = getArg("--teste-email");
 const hasPeriodoFixo = Boolean(inicio || fim);
 
-const queryAsync = (sql, params = []) => pool.promise().query(sql, params).then(([rows]) => rows);
+let pool = null;
+
+const getPool = async () => {
+    if (!pool) {
+        const config = await import("../../config/config.mjs");
+        pool = config.pool;
+    }
+
+    return pool;
+};
+
+const queryAsync = async (sql, params = []) => {
+    const dbPool = await getPool();
+    return dbPool.promise().query(sql, params).then(([rows]) => rows);
+};
 
 const enviarEmail = (destinatario, assunto, conteudo) => new Promise((resolve, reject) => {
     enviaEmailModel.enviaEmail(destinatario, assunto, conteudo, (err, result) => {
@@ -34,6 +48,12 @@ const formatDateBR = (date) => {
     const parsed = date instanceof Date ? date : new Date(date);
     if (Number.isNaN(parsed.getTime())) return null;
     return parsed.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+};
+
+const addMonths = (date, monthsToAdd) => {
+    const nextDate = new Date(date);
+    nextDate.setMonth(nextDate.getMonth() + monthsToAdd);
+    return nextDate;
 };
 
 const assertValidArgs = () => {
@@ -66,6 +86,25 @@ const assertValidArgs = () => {
     if (!url || !/^https?:\/\//.test(url)) {
         throw new Error("Informe --url com uma URL absoluta.");
     }
+
+    if (testeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testeEmail)) {
+        throw new Error("Informe --teste-email com um e-mail valido.");
+    }
+};
+
+const enviarEmailTeste = async () => {
+    const email = String(testeEmail || "").trim().toLowerCase();
+    const dataFim = formatDateBR(addMonths(new Date(), meses));
+    const html = PremiumCortesiaRecuperacao({
+        nome: "teste",
+        meses,
+        url,
+        dataFim,
+    });
+
+    console.log(`TESTE: enviando previa da campanha Premium cortesia para ${email}.`);
+    await enviarEmail(email, "Uma cortesia para voce voltar ao DosDois", html);
+    console.log("Teste enviado. Nenhum usuario foi consultado, nenhuma cortesia foi concedida e nenhum envio foi registrado.");
 };
 
 const loadCampanha = async () => {
@@ -212,7 +251,8 @@ const ativaPremiumCortesia = async ({ campanhaId, usuario, planoPremium }) => {
             ]
         );
     } else {
-        const result = await pool.promise().query(
+        const dbPool = await getPool();
+        const result = await dbPool.promise().query(
             `INSERT INTO dosdois.assinaturas
                 (casal, plano_id, status, inicio, fim, billing_provider, provider_external_reference, provider_status, created_at, updated_at)
              VALUES (?, ?, 'ativa', ?, ?, 'promocional', ?, 'premium_cortesia', NOW(), NOW())`,
@@ -259,6 +299,11 @@ const ativaPremiumCortesia = async ({ campanhaId, usuario, planoPremium }) => {
 
 const main = async () => {
     assertValidArgs();
+
+    if (testeEmail) {
+        await enviarEmailTeste();
+        return;
+    }
 
     const campanha = await loadCampanha();
     const planoPremium = await loadPremiumPlan();
@@ -312,5 +357,7 @@ main()
         process.exitCode = 1;
     })
     .finally(() => {
-        pool.end();
+        if (pool) {
+            pool.end();
+        }
     });
