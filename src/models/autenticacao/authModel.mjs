@@ -40,7 +40,7 @@ const criaTokenValidacaoWhats = async (idUsuario) => {
   const token = crypto.randomInt(100000, 1000000).toString();
   const validade = await criaValidadeToken();
 
-  await new Promise((resolve, reject) => {
+  const result = await new Promise((resolve, reject) => {
     pool.query(
       "INSERT INTO senha_temp (id_usuario, token, validade, uuid, tipo) VALUES (?, ?, ?, ?, ?)",
       [idUsuario, token, validade, null, 'login'],
@@ -48,19 +48,92 @@ const criaTokenValidacaoWhats = async (idUsuario) => {
     );
   });
 
-  return token;
+  return { token, tokenId: result.insertId };
+};
+
+const serializaDetalheWhats = (detalhe) => {
+  if (detalhe === undefined || detalhe === null) return null;
+
+  try {
+    return JSON.stringify(detalhe);
+  } catch {
+    return String(detalhe);
+  }
+};
+
+const registraTentativaWhatsInicial = async ({ userId, senhaTempId, fone, mensagem }) => {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      pool.query(
+        `INSERT INTO whatsapp_envios (
+          usuario, senha_temp, finalidade, fone, mensagem, status
+        ) VALUES (?, ?, 'cadastro_validacao', ?, ?, 'pendente')`,
+        [userId, senhaTempId, fone, mensagem],
+        (err, results) => (err ? reject(err) : resolve(results))
+      );
+    });
+
+    return result.insertId;
+  } catch (error) {
+    console.error('Não foi possível registrar tentativa inicial de WhatsApp:', error);
+    return null;
+  }
+};
+
+const atualizaTentativaWhatsInicial = async ({ envioId, status, detalhe, erro }) => {
+  if (!envioId) return;
+
+  const providerMessageId = detalhe?.results?.messageId
+    || detalhe?.results?.id?._serialized
+    || detalhe?.messageId
+    || null;
+
+  try {
+    await new Promise((resolve, reject) => {
+      pool.query(
+        `UPDATE whatsapp_envios
+         SET status = ?,
+             provider_message_id = ?,
+             resposta_json = ?,
+             erro = ?,
+             atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [
+          status,
+          providerMessageId,
+          serializaDetalheWhats(detalhe),
+          erro ? String(erro?.message || erro).slice(0, 1000) : null,
+          envioId
+        ],
+        (err, results) => (err ? reject(err) : resolve(results))
+      );
+    });
+  } catch (error) {
+    console.error('Não foi possível atualizar tentativa inicial de WhatsApp:', error);
+  }
 };
 
 const enviaCodigoValidacaoWhats = async ({ userId, fone, url }) => {
-  const tokenWhats = await criaTokenValidacaoWhats(userId);
+  const { token: tokenWhats, tokenId } = await criaTokenValidacaoWhats(userId);
   const conviteParceiro = url
     ? ` Para convidar seu parceiro, envie este link: ${url}`
     : '';
-
-  return enviaWhats(
+  const mensagem = `Bem-vindo ao app *DosDois*! Seu código para validar o WhatsApp é: *${tokenWhats}*.${conviteParceiro}`;
+  const envioId = await registraTentativaWhatsInicial({
+    userId,
+    senhaTempId: tokenId,
     fone,
-    `Bem-vindo ao app *DosDois*! Seu código para validar o WhatsApp é: *${tokenWhats}*.${conviteParceiro}`
-  );
+    mensagem
+  });
+
+  try {
+    const result = await enviaWhats(fone, mensagem);
+    await atualizaTentativaWhatsInicial({ envioId, status: 'enviado', detalhe: result, erro: null });
+    return result;
+  } catch (error) {
+    await atualizaTentativaWhatsInicial({ envioId, status: 'erro', detalhe: null, erro: error });
+    throw error;
+  }
 };
 
 const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, userId }) => {
