@@ -265,8 +265,8 @@ class CartoesModel {
             }
 
             await queryAsync(
-                'UPDATE despesa SET status = 1, banco = ?, tipo = ? WHERE fatura = ? AND cartao = ?',
-                [cartao.banco, tipo, fatura.id, cartao.id_cartao]
+                'UPDATE despesa SET status = 1, banco = ? WHERE fatura = ? AND cartao = ?',
+                [cartao.banco, fatura.id, cartao.id_cartao]
             )
 
             // Registra o pagamento para controle da lista de despesas, com efeito liquido zero no saldo.
