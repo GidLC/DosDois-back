@@ -10,11 +10,13 @@ const PremiumCortesiaRecuperacao = ({
     nome,
     meses = 3,
     url,
+    playStoreUrl = "https://play.google.com/store/apps/details?id=br.com.dosdoisapp&hl=pt_BR",
     dataFim,
 }) => {
     const nomeUsuario = escapeHtml(nome || "tudo bem");
     const mesesTexto = Number(meses) === 1 ? "1 mês" : `${Number(meses) || 3} meses`;
     const urlSeguro = escapeHtml(url);
+    const playStoreUrlSeguro = escapeHtml(playStoreUrl);
     const dataFimTexto = dataFim ? escapeHtml(dataFim) : null;
 
     return `
@@ -34,10 +36,17 @@ const PremiumCortesiaRecuperacao = ({
 
                     <p>Durante esse período você pode usar os recursos Premium para organizar a rotina financeira do casal com mais tranquilidade: limites maiores, gráficos completos, fechamento mensal e uma experiência sem anúncios.</p>
 
+                    <p>Antes de voltar, recomendamos atualizar o app pela Play Store para receber as correções que removem os bloqueios no cadastro e no uso do plano Free.</p>
+
                     <p style="margin: 24px 0;">
                         <a href="${urlSeguro}" style="display: inline-block; padding: 13px 18px; border-radius: 8px; background: #10242f; color: #ffffff; font-weight: 700; text-decoration: none;">
-                            Voltar ao DosDois
+                            Ativar Premium grátis
                         </a>
+                    </p>
+
+                    <p style="margin: -10px 0 22px; font-size: 14px; color: #4a5f66;">
+                        Se preferir ir direto para a loja, acesse:
+                        <a href="${playStoreUrlSeguro}" style="color: #10242f; font-weight: 700;">Atualizar ou baixar o app</a>.
                     </p>
 
                     ${dataFimTexto ? `<p style="font-size: 14px; color: #4a5f66;">Sua cortesia fica disponível até <strong>${dataFimTexto}</strong>.</p>` : ""}

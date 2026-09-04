@@ -17,7 +17,8 @@ const inicio = getArg("--inicio");
 const fim = getArg("--fim");
 const meses = Number(getArg("--meses", "3"));
 const limit = Number(getArg("--limit", "0"));
-const url = getArg("--url", "https://web.dosdoisapp.com.br/conta?promo=premium-cortesia");
+const defaultCampanhaUrl = "https://dosdoisapp.com.br/promo/premium-cortesia?utm_source=email&utm_medium=campanha&utm_campaign=premium_cortesia_recuperacao";
+const url = getArg("--url");
 const testeEmail = getArg("--teste-email");
 const hasPeriodoFixo = Boolean(inicio || fim);
 
@@ -51,6 +52,8 @@ const enviarEmail = async (destinatario, assunto, conteudo) => {
 
     return result;
 };
+
+const getCampanhaUrl = (campanha = null) => url || campanha?.cta_url || defaultCampanhaUrl;
 
 const formatDateBR = (date) => {
     const parsed = date instanceof Date ? date : new Date(date);
@@ -91,7 +94,7 @@ const assertValidArgs = () => {
         throw new Error("Informe --meses com um numero inteiro positivo.");
     }
 
-    if (!url || !/^https?:\/\//.test(url)) {
+    if (url && !/^https?:\/\//.test(url)) {
         throw new Error("Informe --url com uma URL absoluta.");
     }
 
@@ -106,7 +109,7 @@ const enviarEmailTeste = async () => {
     const html = PremiumCortesiaRecuperacao({
         nome: "teste",
         meses,
-        url,
+        url: getCampanhaUrl(),
         dataFim,
     });
 
@@ -314,6 +317,7 @@ const main = async () => {
     }
 
     const campanha = await loadCampanha();
+    const campanhaUrl = getCampanhaUrl(campanha);
     const planoPremium = await loadPremiumPlan();
     const usuarios = await loadUsuariosElegiveis(campanha.id);
     const periodoTexto = hasPeriodoFixo
@@ -339,7 +343,7 @@ const main = async () => {
             const html = PremiumCortesiaRecuperacao({
                 nome: usuario.nome,
                 meses,
-                url,
+                url: campanhaUrl,
                 dataFim: concessao?.fim ? formatDateBR(concessao.fim) : null,
             });
 
