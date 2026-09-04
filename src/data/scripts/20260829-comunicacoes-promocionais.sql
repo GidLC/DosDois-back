@@ -101,8 +101,8 @@ VALUES
     'rascunho',
     'Uma cortesia para voce voltar ao DosDois',
     'Pedido de desculpas pelas falhas recentes. Libere Premium gratis por alguns meses, sem cobranca e sem cartao. Ao final, seus dados continuam salvos e o Free volta para novos cadastros.',
-    'Voltar ao DosDois',
-    'https://web.dosdoisapp.com.br/conta?promo=premium-cortesia',
+    'Ativar Premium gratis',
+    'https://dosdoisapp.com.br/promo/premium-cortesia?utm_source=email&utm_medium=campanha&utm_campaign=premium_cortesia_recuperacao',
     'PREMIUM_CORTESIA_RECUPERACAO',
     3,
     'codex'
