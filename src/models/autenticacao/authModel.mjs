@@ -116,9 +116,9 @@ const atualizaTentativaWhatsInicial = async ({ envioId, status, detalhe, erro })
 const enviaCodigoValidacaoWhats = async ({ userId, fone, url }) => {
   const { token: tokenWhats, tokenId } = await criaTokenValidacaoWhats(userId);
   const conviteParceiro = url
-    ? ` Para convidar seu parceiro, envie este link: ${url}`
+    ? `\n\nDepois de entrar no app, você também pode convidar seu parceiro para organizar as finanças com você.\nLink do convite:\n${url}`
     : '';
-  const mensagem = `Bem-vindo ao app *DosDois*! Seu código para validar o WhatsApp é: *${tokenWhats}*.${conviteParceiro}`;
+  const mensagem = `Bem-vindo ao DosDois!\nSeu código de validação é: *${tokenWhats}*${conviteParceiro}`;
   const envioId = await registraTentativaWhatsInicial({
     userId,
     senhaTempId: tokenId,
