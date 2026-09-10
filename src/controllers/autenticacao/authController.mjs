@@ -211,6 +211,10 @@ const verificaWhats = (req, res) => {
 
   AuthModel.verificaWhats(fone, origem, idUser, plano, (err, results) => {
     if (err) {
+      if (['nao_encontrado', 'nao_verificado', 'plano_free'].includes(err)) {
+        return res.status(200).json({ message: `Não foi possível validar seu whatsapp.`, err, results })
+      }
+
       return res.status(500).json({ message: `Não foi possível validar seu whatsapp.`, err })
     }
 
