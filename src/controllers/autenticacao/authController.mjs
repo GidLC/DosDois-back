@@ -113,6 +113,14 @@ const gerarToken = (req, res) => {
 
   AuthModel.gerarToken({ fone, tipo }, (err, results) => {
     if (err) {
+      if (err === 'plano_free') {
+        return res.status(200).json({
+          message: 'O assistente Dodô no WhatsApp não faz parte do plano Free.',
+          err,
+          results
+        });
+      }
+
       console.error('Erro ao encontrar cadastro', err);
       return res.status(500).json({ error: 'Erro ao encontrar cadastro' });
     } else if (!results) {

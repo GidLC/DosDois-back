@@ -73,6 +73,19 @@ const loadCurrentUsage = async (auth, moduleCode, moduleId) => {
     return Number(usage?.uso || 0);
 };
 
+const accessPlanSelect = `
+    SELECT p.*, a.fim, a.id AS assinatura_id, a.status AS assinatura_status
+    FROM assinaturas AS a
+    JOIN planos p ON p.id = a.plano_id
+    WHERE a.casal = ?
+      AND (
+        (a.status = 'ativa' AND (a.fim IS NULL OR a.fim >= CURDATE()))
+        OR (a.status = 'pendente' AND a.fim >= CURDATE())
+      )
+    ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
+    LIMIT 1
+`;
+
 const attachPendingSubscription = async (auth, plan) => {
     const [assinaturaPendente] = await queryAsync(`
     SELECT
@@ -139,29 +152,11 @@ export const loadPlan = async (req, res, next) => {
         return next();
     }
 
-    let [assinatura] = await queryAsync(`
-    SELECT p.*, a.fim, a.id AS assinatura_id
-    FROM assinaturas AS a
-    JOIN planos p ON p.id = a.plano_id
-    WHERE a.casal = ?
-      AND a.status = 'ativa'
-      AND (a.fim IS NULL OR a.fim >= CURDATE())
-    ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
-    LIMIT 1
-  `, [auth]);
+    let [assinatura] = await queryAsync(accessPlanSelect, [auth]);
 
     if (!assinatura) {
         await ensureFreeSubscription(auth);
-        [assinatura] = await queryAsync(`
-    SELECT p.*, a.fim, a.id AS assinatura_id
-    FROM assinaturas AS a
-    JOIN planos p ON p.id = a.plano_id
-    WHERE a.casal = ?
-      AND a.status = 'ativa'
-      AND (a.fim IS NULL OR a.fim >= CURDATE())
-    ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
-    LIMIT 1
-  `, [auth]);
+        [assinatura] = await queryAsync(accessPlanSelect, [auth]);
     }
 
     req.plano = assinatura || await loadFreePlan();
@@ -174,29 +169,11 @@ export const loadPlanFunction = async (auth) => {
         return await loadFreePlan();
     }
 
-    let [assinatura] = await queryAsync(`
-    SELECT p.*, a.fim, a.id AS assinatura_id
-    FROM assinaturas AS a
-    JOIN planos p ON p.id = a.plano_id
-    WHERE a.casal = ?
-      AND a.status = 'ativa'
-      AND (a.fim IS NULL OR a.fim >= CURDATE())
-    ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
-    LIMIT 1
-  `, [auth]);
+    let [assinatura] = await queryAsync(accessPlanSelect, [auth]);
 
     if (!assinatura) {
         await ensureFreeSubscription(auth);
-        [assinatura] = await queryAsync(`
-    SELECT p.*, a.fim, a.id AS assinatura_id
-    FROM assinaturas AS a
-    JOIN planos p ON p.id = a.plano_id
-    WHERE a.casal = ?
-      AND a.status = 'ativa'
-      AND (a.fim IS NULL OR a.fim >= CURDATE())
-    ORDER BY (LOWER(p.codigo) = 'free') ASC, a.id DESC
-    LIMIT 1
-  `, [auth]);
+        [assinatura] = await queryAsync(accessPlanSelect, [auth]);
     }
 
     const plan = assinatura || await loadFreePlan();
@@ -238,7 +215,12 @@ export const checkModuleLimit = (moduleCode, permitir = null) => {
         SELECT pm.limite, pm.ativo, pm.por_casal
         FROM assinaturas AS a
         JOIN planos_limites AS pm ON pm.plano_id = a.plano_id
-        WHERE a.casal = ? AND a.status = 'ativa' AND pm.modulo = ?
+        WHERE a.casal = ?
+          AND (
+            (a.status = 'ativa' AND (a.fim IS NULL OR a.fim >= CURDATE()))
+            OR (a.status = 'pendente' AND a.fim >= CURDATE())
+          )
+          AND pm.modulo = ?
       `, [auth, module.id]);
 
         //Se não foi encontrado o módulo ou não está ativo

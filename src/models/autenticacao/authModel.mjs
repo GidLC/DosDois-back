@@ -37,6 +37,12 @@ const safeIncrementaUso = async (casal, modulo, qtd = 1) => {
 };
 
 const isFreePlan = (plano) => String(plano?.codigo || '').toLowerCase() === 'free';
+const hasWhatsIntegration = (plano) => !isFreePlan(plano) && (plano?.has_whatsapp === true || Number(plano?.has_whatsapp) === 1);
+
+const casalHasWhatsIntegration = async (casal) => {
+  const plano = await loadPlanFunction(casal);
+  return hasWhatsIntegration(plano);
+};
 
 const criaTokenValidacaoWhats = async (idUsuario) => {
   const token = crypto.randomInt(100000, 1000000).toString();
@@ -145,7 +151,7 @@ const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, 
     notifications.push(enviaEmail(email, "Cadastro no DosDois", EmailCadastro(nome, codigoCasal, url)));
   }
 
-  if (fone) {
+  if (fone && await casalHasWhatsIntegration(codigoCasal)) {
     notifications.push(
       enviaCodigoValidacaoWhats({ userId, fone, url })
     );
@@ -235,7 +241,7 @@ const vincularParceiro = async ({ nome, email, senha, cod_casal, fone = null, se
 
     await connection.commit();
 
-    if (fone && !incompleto) {
+    if (fone && !incompleto && await casalHasWhatsIntegration(cod_casal)) {
       const [notification] = await Promise.allSettled([
         enviaCodigoValidacaoWhats({ userId, fone, url: null })
       ]);
@@ -598,6 +604,13 @@ class AuthModel {
         return callback("Usuário não encontrado", null);
       }
 
+      if (tipo === "login") {
+        const result = await getUserData(buscaUsuario[0], null);
+        if (!hasWhatsIntegration(result?.userData?.plano)) {
+          return callback("plano_free", result);
+        }
+      }
+
       const userId = buscaUsuario[0].id
 
       // Salva token na tabela
@@ -850,7 +863,10 @@ class AuthModel {
         if (!usuarioAtualizado) return callback('Usuário não encontrado', null);
 
         const concluiuCadastroGoogle = usuarioAntes.incompleto == 1 && usuarioAtualizado.incompleto == 0;
-        const deveEnviarWhatsCadastro = concluiuCadastroGoogle && fone && usuarioAtualizado.whats_verificado == 0;
+        const deveEnviarWhatsCadastro = concluiuCadastroGoogle
+          && fone
+          && usuarioAtualizado.whats_verificado == 0
+          && await casalHasWhatsIntegration(usuarioAtualizado.casal);
 
         if (deveEnviarWhatsCadastro) {
           try {
@@ -951,12 +967,13 @@ class AuthModel {
       });
 
       if (!usuario) return callback('nao_encontrado', null);
-      if (usuario.whats_verificado == 0) return callback('nao_verificado', null);
-
       const result = await getUserData(usuario, null, plano);
-      if (origem !== 'app' && isFreePlan(result?.userData?.plano)) {
+
+      if (!hasWhatsIntegration(result?.userData?.plano)) {
         return callback('plano_free', result);
       }
+
+      if (usuario.whats_verificado == 0) return callback('nao_verificado', null);
 
       return callback(null, result);
     } catch (error) {
