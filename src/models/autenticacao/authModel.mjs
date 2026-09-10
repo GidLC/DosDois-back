@@ -36,6 +36,8 @@ const safeIncrementaUso = async (casal, modulo, qtd = 1) => {
   }
 };
 
+const isFreePlan = (plano) => String(plano?.codigo || '').toLowerCase() === 'free';
+
 const criaTokenValidacaoWhats = async (idUsuario) => {
   const token = crypto.randomInt(100000, 1000000).toString();
   const validade = await criaValidadeToken();
@@ -952,6 +954,10 @@ class AuthModel {
       if (usuario.whats_verificado == 0) return callback('nao_verificado', null);
 
       const result = await getUserData(usuario, null, plano);
+      if (origem !== 'app' && isFreePlan(result?.userData?.plano)) {
+        return callback('plano_free', result);
+      }
+
       return callback(null, result);
     } catch (error) {
       console.error(`Erro na verificação de WhatsApp: ${error}`);
