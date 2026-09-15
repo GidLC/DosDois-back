@@ -73,6 +73,27 @@ const getPreferenceInternalReference = (externalReference) => {
     return match?.[1] || null;
 }
 
+const getAsaasCheckoutPayload = (req) =>
+    req.body?.checkout || req.body?.checkoutSession || req.body?.checkout_session || req.body?.data || {};
+
+const getAsaasCheckoutId = (checkoutPayload, req) =>
+    checkoutPayload?.id
+    || checkoutPayload?.checkoutId
+    || checkoutPayload?.checkout_id
+    || req.body?.checkoutId
+    || req.body?.checkout_id
+    || null;
+
+const getAsaasCheckoutExternalReference = (checkoutPayload, req) =>
+    checkoutPayload?.externalReference
+    || checkoutPayload?.external_reference
+    || req.body?.externalReference
+    || req.body?.external_reference
+    || null;
+
+const isAsaasCheckoutEncerradoEvent = (event) =>
+    ["CHECKOUT_CANCELED", "CHECKOUT_CANCELLED", "CHECKOUT_EXPIRED"].includes(String(event || "").toUpperCase());
+
 const createCheckout = async (req, res) => {
     try {
         const { offerId, planKey } = req.body
@@ -109,6 +130,27 @@ const createCheckout = async (req, res) => {
                 error: 'CHECKOUT_SEM_CASAL',
                 message: 'Finalize seu cadastro ou entre novamente antes de assinar.',
             })
+        }
+
+        const expirados = IS_ASAAS_BILLING_PROVIDER
+            ? await AssinaturaModel.expirarCheckoutsAsaasSemPagamento(codCasal)
+            : null;
+
+        if (expirados?.affectedRows) {
+            trackAssinaturaEvento({
+                evento: "checkout_expired_local",
+                source: "app",
+                status: "released",
+                contexto: req.body?.contexto,
+                offerId: codigoOferta,
+                casal: codCasal,
+                usuario: auth?.id,
+                metadata: {
+                    billingProvider: BILLING_PROVIDER,
+                    affectedRows: expirados.affectedRows,
+                },
+                req,
+            });
         }
 
         const assinaturaAtual = await AssinaturaModel.getAssinaturaCorrente(codCasal)
@@ -424,7 +466,7 @@ const createAssinatura = (req, res) => {
             }
 
             trackAssinaturaEvento({
-                evento: "payment_success",
+                evento: "asaas_checkout_created",
                 source: "checkout",
                 status: results?.status || "submitted",
                 offerId: checkout.offerId,
@@ -797,6 +839,7 @@ const asaasWebHook = async (req, res) => {
     const payment = req.body?.payment;
     const subscription = req.body?.subscription;
     const eventId = req.body?.id;
+    const checkoutPayload = getAsaasCheckoutPayload(req);
 
     try {
         const receivedToken = String(req.headers?.["asaas-access-token"] || "").trim();
@@ -816,6 +859,7 @@ const asaasWebHook = async (req, res) => {
             eventId,
             paymentId: payment?.id,
             subscriptionId: subscription?.id || payment?.subscription,
+            checkoutId: getAsaasCheckoutId(checkoutPayload, req),
         });
 
         trackAssinaturaEvento({
@@ -827,10 +871,58 @@ const asaasWebHook = async (req, res) => {
                 paymentId: payment?.id,
                 paymentStatus: payment?.status,
                 subscriptionId: subscription?.id || payment?.subscription,
+                checkoutId: getAsaasCheckoutId(checkoutPayload, req),
                 asaasEnv: ASAAS_ENV,
             },
             req,
         });
+
+        if (isAsaasCheckoutEncerradoEvent(event)) {
+            const checkoutId = getAsaasCheckoutId(checkoutPayload, req);
+            const externalReference = getAsaasCheckoutExternalReference(checkoutPayload, req);
+            const resultado = await AssinaturaModel.marcarCheckoutAsaasEncerrado({
+                checkoutId,
+                externalReference,
+                status: String(event || "").toLowerCase(),
+            });
+
+            if (!resultado) {
+                console.warn("Webhook Asaas de checkout encerrado sem assinatura local liberada", {
+                    event,
+                    eventId,
+                    checkoutId,
+                    externalReference,
+                    asaasEnv: ASAAS_ENV,
+                });
+            } else {
+                console.info("Checkout Asaas encerrado liberou assinatura local", {
+                    event,
+                    eventId,
+                    checkoutId,
+                    externalReference,
+                    assinaturaId: resultado.id,
+                    asaasEnv: ASAAS_ENV,
+                });
+            }
+
+            trackAssinaturaEvento({
+                evento: "checkout_provider_closed",
+                source: "asaas",
+                status: event,
+                casal: resultado?.casal,
+                assinaturaId: resultado?.id,
+                metadata: {
+                    eventId,
+                    checkoutId,
+                    externalReference,
+                    localStatus: resultado ? "cancelada" : null,
+                    asaasEnv: ASAAS_ENV,
+                },
+                req,
+            });
+
+            return res.sendStatus(200);
+        }
 
         if (event?.startsWith?.("PAYMENT_") && payment?.id) {
             const resultado = await AssinaturaModel.atualizarPagamentoAsaas(payment, event);

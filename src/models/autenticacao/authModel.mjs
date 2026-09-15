@@ -121,6 +121,29 @@ const atualizaTentativaWhatsInicial = async ({ envioId, status, detalhe, erro })
   }
 };
 
+const getWhatsProviderMessageId = (detalhe) =>
+  detalhe?.results?.messageId
+  || detalhe?.results?.id?._serialized
+  || detalhe?.messageId
+  || null;
+
+const validaAceiteEntregaWhats = (detalhe) => {
+  const providerMessageId = getWhatsProviderMessageId(detalhe);
+  const ack = detalhe?.results?.ack ?? detalhe?.ack;
+
+  if (!providerMessageId) {
+    throw new Error('API WhatsApp respondeu sem identificador da mensagem.');
+  }
+
+  if (ack === undefined || ack === null) {
+    throw new Error(`API WhatsApp respondeu sem confirmação de entrega para a mensagem ${providerMessageId}.`);
+  }
+
+  if (Number(ack) < 2) {
+    throw new Error(`WhatsApp ainda nao confirmou entrega no dispositivo para a mensagem ${providerMessageId}. ACK atual: ${ack}.`);
+  }
+};
+
 const enviaCodigoValidacaoWhats = async ({ userId, fone, url }) => {
   const { token: tokenWhats, tokenId } = await criaTokenValidacaoWhats(userId);
   const conviteParceiro = url
@@ -136,6 +159,7 @@ const enviaCodigoValidacaoWhats = async ({ userId, fone, url }) => {
 
   try {
     const result = await enviaWhats(fone, mensagem);
+    validaAceiteEntregaWhats(result);
     await atualizaTentativaWhatsInicial({ envioId, status: 'enviado', detalhe: result, erro: null });
     return result;
   } catch (error) {

@@ -352,6 +352,7 @@ const rollback = (connection) =>
 const isAssinaturaCorrente = (assinatura) => {
     if (!assinatura) return false;
     if (String(assinatura.plano_codigo || assinatura.codigo || '').toLowerCase() === 'free') return false;
+    if (isCheckoutAsaasExpiravel(assinatura)) return false;
     if (assinatura.fim) {
         const fim = new Date(assinatura.fim);
         const hoje = new Date();
@@ -367,6 +368,19 @@ const isAssinaturaCorrente = (assinatura) => {
     const reservaExpiraEm = 20 * 60 * 1000;
 
     return updatedAt && Date.now() - updatedAt < reservaExpiraEm;
+};
+
+const isCheckoutAsaasExpiravel = (assinatura, minutosExpiracao = 70) => {
+    if (!assinatura) return false;
+    if (assinatura.billing_provider !== "asaas") return false;
+    if (!["pendente", "criando"].includes(assinatura.status)) return false;
+    if (!assinatura.provider_checkout_id) return false;
+    if (assinatura.provider_subscription_id || assinatura.provider_payment_id) return false;
+
+    const updatedAt = assinatura.updated_at ? new Date(assinatura.updated_at).getTime() : 0;
+    const expiraEm = Number(minutosExpiracao || 70) * 60 * 1000;
+
+    return updatedAt && Date.now() - updatedAt > expiraEm;
 };
 
 const agrupaBeneficiosPorPlano = (beneficios = []) => {
@@ -414,6 +428,8 @@ class AssinaturaModel {
     }
 
     static getAssinaturaCorrente = async (casal) => {
+        await this.expirarCheckoutsAsaasSemPagamento(casal);
+
         const [assinatura] = await queryAsync(`
             SELECT a.*, p.codigo AS plano_codigo
             FROM assinaturas AS a
@@ -429,6 +445,73 @@ class AssinaturaModel {
         `, [casal])
 
         return assinatura
+    }
+
+    static expirarCheckoutsAsaasSemPagamento = async (casal = null, minutosExpiracao = 70) => {
+        const params = [Number(minutosExpiracao) || 70];
+        const casalFilter = casal ? "AND casal = ?" : "";
+
+        if (casal) params.push(casal);
+
+        const result = await queryAsync(`
+            UPDATE assinaturas
+            SET status = 'cancelada',
+                provider_status = 'checkout_expired_local',
+                updated_at = NOW()
+            WHERE billing_provider = 'asaas'
+              AND status IN ('pendente', 'criando')
+              AND provider_checkout_id IS NOT NULL
+              AND provider_subscription_id IS NULL
+              AND provider_payment_id IS NULL
+              AND updated_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)
+              ${casalFilter}
+        `, params);
+
+        return {
+            affectedRows: result?.affectedRows || 0,
+        };
+    }
+
+    static marcarCheckoutAsaasEncerrado = async ({ checkoutId, externalReference, status }) => {
+        if (!checkoutId && !externalReference) return null;
+
+        const params = [
+            status || "checkout_closed",
+            checkoutId || null,
+            externalReference || null,
+        ];
+
+        const result = await queryAsync(`
+            UPDATE assinaturas
+            SET status = 'cancelada',
+                provider_status = ?,
+                updated_at = NOW()
+            WHERE billing_provider = 'asaas'
+              AND status IN ('pendente', 'criando')
+              AND provider_subscription_id IS NULL
+              AND provider_payment_id IS NULL
+              AND (
+                provider_checkout_id = ?
+                OR provider_external_reference = ?
+              )
+            LIMIT 1
+        `, params);
+
+        if (!result?.affectedRows) return null;
+
+        const [assinatura] = await queryAsync(`
+            SELECT *
+            FROM assinaturas
+            WHERE billing_provider = 'asaas'
+              AND (
+                provider_checkout_id = ?
+                OR provider_external_reference = ?
+              )
+            ORDER BY updated_at DESC
+            LIMIT 1
+        `, [checkoutId || null, externalReference || null]);
+
+        return assinatura || null;
     }
 
     static getAssinaturaAtiva = async (casal) => {
