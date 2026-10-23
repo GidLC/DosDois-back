@@ -39,11 +39,6 @@ const safeIncrementaUso = async (casal, modulo, qtd = 1) => {
 const isFreePlan = (plano) => String(plano?.codigo || '').toLowerCase() === 'free';
 const hasWhatsIntegration = (plano) => !isFreePlan(plano) && (plano?.has_whatsapp === true || Number(plano?.has_whatsapp) === 1);
 
-const casalHasWhatsIntegration = async (casal) => {
-  const plano = await loadPlanFunction(casal);
-  return hasWhatsIntegration(plano);
-};
-
 const criaTokenValidacaoWhats = async (idUsuario) => {
   const token = crypto.randomInt(100000, 1000000).toString();
   const validade = await criaValidadeToken();
@@ -175,7 +170,7 @@ const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, 
     notifications.push(enviaEmail(email, "Cadastro no DosDois", EmailCadastro(nome, codigoCasal, url)));
   }
 
-  if (fone && await casalHasWhatsIntegration(codigoCasal)) {
+  if (fone) {
     notifications.push(
       enviaCodigoValidacaoWhats({ userId, fone, url })
     );
@@ -265,7 +260,7 @@ const vincularParceiro = async ({ nome, email, senha, cod_casal, fone = null, se
 
     await connection.commit();
 
-    if (fone && !incompleto && await casalHasWhatsIntegration(cod_casal)) {
+    if (fone && !incompleto) {
       const [notification] = await Promise.allSettled([
         enviaCodigoValidacaoWhats({ userId, fone, url: null })
       ]);
@@ -889,8 +884,7 @@ class AuthModel {
         const concluiuCadastroGoogle = usuarioAntes.incompleto == 1 && usuarioAtualizado.incompleto == 0;
         const deveEnviarWhatsCadastro = concluiuCadastroGoogle
           && fone
-          && usuarioAtualizado.whats_verificado == 0
-          && await casalHasWhatsIntegration(usuarioAtualizado.casal);
+          && usuarioAtualizado.whats_verificado == 0;
 
         if (deveEnviarWhatsCadastro) {
           try {
