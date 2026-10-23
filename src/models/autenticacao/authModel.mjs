@@ -145,6 +145,7 @@ const validaAceiteEntregaWhats = (detalhe) => {
 };
 
 const enviaCodigoValidacaoWhats = async ({ userId, fone, url }) => {
+  console.log({ userId, fone, url})
   const { token: tokenWhats, tokenId } = await criaTokenValidacaoWhats(userId);
   const conviteParceiro = url
     ? `\n\nDepois de entrar no app, você também pode convidar seu parceiro para organizar as finanças com você.\nLink do convite:\n${url}`
