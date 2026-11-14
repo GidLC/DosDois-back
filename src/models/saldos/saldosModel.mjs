@@ -1,6 +1,19 @@
 import { pool } from "../../config/config.mjs";
 import {queryAsync} from "../../data/queryAsync/queryAsync.mjs"
 
+const obterPeriodoAtualSaoPaulo = () => {
+    const partes = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: 'numeric'
+    }).formatToParts(new Date());
+
+    return {
+        ano: Number(partes.find(parte => parte.type === 'year')?.value),
+        mes: Number(partes.find(parte => parte.type === 'month')?.value) - 1
+    };
+};
+
 class SaldosModel {
     //Função para cálculo de todos os saldos da aplicação - saldo estático
     static saldoGeral = async (casal, usuario, callback) => {
@@ -208,6 +221,16 @@ class SaldosModel {
 
                         let saldoAcumulado = Number(saldo_inicial);
 
+                        const snapshotsBD = await queryAsync(
+                            'SELECT ano, mes, saldo FROM saldo_mensal WHERE casal = ? AND banco_id = ? AND ano BETWEEN ? AND ?',
+                            [casal, bancoId, ANO_INICIAL, Number(ano)]
+                        );
+                        const snapshots = new Map(snapshotsBD.map(({ ano: anoSnapshot, mes, saldo }) => [
+                            `${Number(anoSnapshot)}-${Number(mes)}`,
+                            Number(saldo)
+                        ]));
+                        const periodoAtual = obterPeriodoAtualSaoPaulo();
+
                         // ======================================================
                         // Para cada ano
                         // ======================================================
@@ -233,7 +256,7 @@ class SaldosModel {
                                     sinal: -1,
                                 },
                                 {
-                                    sql: 'SELECT mes, SUM(valor) total FROM despesas_fixas WHERE banco = ? AND casal = ? AND ano = ? AND status = 1 GROUP BY mes',
+                                    sql: 'SELECT mes, SUM(valor) total FROM despesas_fixas WHERE banco = ? AND casal = ? AND ano = ? AND status = 1 AND cancelada = 0 GROUP BY mes',
                                     sinal: -1,
                                 },
                                 {
@@ -260,9 +283,23 @@ class SaldosModel {
                             for (let m = 0; m < 12; m++) {
                                 saldoAcumulado += movimentosMes[m];
 
+                                const chaveSnapshot = `${anoAtual}-${m}`;
+                                const mesFechado = anoAtual < periodoAtual.ano || (anoAtual === periodoAtual.ano && m < periodoAtual.mes);
+                                if (mesFechado && !snapshots.has(chaveSnapshot)) {
+                                    await queryAsync(
+                                        'INSERT IGNORE INTO saldo_mensal (casal, banco_id, ano, mes, saldo) VALUES (?, ?, ?, ?, ?)',
+                                        [casal, bancoId, anoAtual, m, Number(saldoAcumulado.toFixed(2))]
+                                    );
+                                    const [snapshotSalvo] = await queryAsync(
+                                        'SELECT saldo FROM saldo_mensal WHERE casal = ? AND banco_id = ? AND ano = ? AND mes = ? LIMIT 1',
+                                        [casal, bancoId, anoAtual, m]
+                                    );
+                                    if (snapshotSalvo) snapshots.set(chaveSnapshot, Number(snapshotSalvo.saldo));
+                                }
+
                                 // grava o saldo mensal apenas do ano solicitado
                                 if (anoAtual === Number(ano)) {
-                                    saldoMensal[m] = saldoAcumulado;
+                                    saldoMensal[m] = snapshots.get(chaveSnapshot) ?? saldoAcumulado;
                                 }
                             }
 
@@ -305,6 +342,30 @@ class SaldosModel {
         } catch (error) {
             console.error('Erro ao gerar saldo:', error);
             return callback(error, null);
+        }
+    };
+
+    static snapshotMesesFechados = async (casal = null) => {
+        const periodoAtual = obterPeriodoAtualSaoPaulo();
+        const casais = casal
+            ? [{ cod_casal: casal }]
+            : await queryAsync('SELECT cod_casal FROM casal WHERE cod_casal IS NOT NULL');
+
+        for (const registroCasal of casais) {
+            const codCasal = registroCasal.cod_casal;
+            const [{ usuario_princ, usuario_sec } = {}] = await queryAsync(
+                'SELECT usuario_princ, usuario_sec FROM casal WHERE cod_casal = ? LIMIT 1',
+                [codCasal]
+            );
+
+            if (!usuario_princ) continue;
+
+            await new Promise((resolve, reject) => {
+                SaldosModel.saldoPorPeriodo(codCasal, usuario_princ, periodoAtual.ano, usuario_sec, error => {
+                    if (error) return reject(error);
+                    resolve();
+                });
+            });
         }
     };
 

@@ -1,17 +1,32 @@
 ﻿import DespesaModel from "../models/despesaModel.mjs";
 
+import { queryAsync } from '../../../data/queryAsync/queryAsync.mjs';
+import EventoProdutoModel from '../../telemetria/models/eventoProdutoModel.mjs';
+
 const addDespesa = (req, res) => {
     const { descricao, valor, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado, cartao } = req.body;
     const cod_casal = req.header('auth');
     const usuario = req.header('usuario')
 
-    DespesaModel.addDespesa(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado, cartao, (err, resultado) => {
-        if (err) {
-            console.error('Erro ao cadastrar despesa:', err);
-            return res.status(500).json({ error: `Erro ao cadastrar despesa. ${err}` })
-        }
-        res.status(200).json({ message: 'Despesa cadastrada com sucesso', resultado })
-    });
+    const saveExpense = (isFirstExpense) => {
+        DespesaModel.addDespesa(descricao, valor, usuario, cod_casal, categoria, status, data, banco, tipo, fixa, tag, obs, repetir, parcelado, cartao, (err, resultado) => {
+            if (err) {
+                console.error('Erro ao cadastrar despesa:', err);
+                return res.status(500).json({ error: `Erro ao cadastrar despesa. ${err}` })
+            }
+            if (isFirstExpense) {
+                void EventoProdutoModel.registrar({ evento: 'first_expense_saved', casal: cod_casal, usuario, dedupeKey: `first-expense:${cod_casal}` });
+            }
+            res.status(200).json({ message: 'Despesa cadastrada com sucesso', resultado })
+        });
+    };
+
+    queryAsync('SELECT 1 FROM despesa WHERE casal = ? LIMIT 1', [cod_casal])
+        .then(([existingExpense]) => saveExpense(!existingExpense))
+        .catch(error => {
+            console.error('Erro ao verificar primeira despesa:', error);
+            saveExpense(false);
+        });
 };
 
 const readDespesa = (req, res) => {
@@ -108,6 +123,24 @@ const readDespesa = (req, res) => {
     }
 };
 
+const readCalendarioGastos = async (req, res) => {
+    const casal = req.header('auth');
+    const mes = Number(req.query.mes);
+    const ano = Number(req.query.ano);
+
+    if (!casal || !Number.isInteger(mes) || mes < 0 || mes > 11 || !Number.isInteger(ano)) {
+        return res.status(400).json({ error: 'Período inválido para o calendário de gastos' });
+    }
+
+    try {
+        const resultados = await DespesaModel.readCalendarioGastos(casal, mes, ano);
+        return res.status(200).json({ message: 'Gastos do calendário encontrados', results: resultados });
+    } catch (error) {
+        console.error('Erro ao carregar calendário de gastos:', error);
+        return res.status(500).json({ error: 'Erro ao carregar calendário de gastos' });
+    }
+};
+
 
 
 const readDespesaID = (req, res) => {
@@ -190,4 +223,4 @@ const efetivaDespesa = (req, res) => {
 }
 
 
-export default { addDespesa, readDespesa, deleteDespesa, readDespesaID, editDespesa, editDespesaFixa, efetivaDespesa }
+export default { addDespesa, readDespesa, readCalendarioGastos, deleteDespesa, readDespesaID, editDespesa, editDespesaFixa, efetivaDespesa }

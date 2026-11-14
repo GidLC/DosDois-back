@@ -2,11 +2,13 @@ import separaData from "../data/SeparaData/SeparaData.mjs"
 import { queryAsync } from "../data/queryAsync/queryAsync.mjs"
 import { getOrCreateFatura } from "../features/cartoes/utils/getOrCreateFatura.mjs"
 import DespesaModel from "../features/despesas/models/despesaModel.mjs"
+import { ensureDespesasFixasMes } from "../features/despesas/utils/despesasFixasMes.mjs"
 
 export const fechaFaturas = async () => {
     try {
         const data = new Date()
         const dataBR = await separaData(data)
+        await ensureDespesasFixasMes(dataBR.mes, dataBR.ano)
 
         const queryCartoes = `SELECT id_cartao as id, fech FROM cartoes WHERE fech = ?`
 
@@ -42,6 +44,9 @@ export const fechaFaturas = async () => {
             const despFixas = await queryAsync(queryFixas, [cartao.id])
 
             for (const despesa of despFixas) {
+                const mesCompra = Number(mesNovo) + 1
+                const ultimoDiaMes = new Date(Number(anoNovo), mesCompra, 0).getDate()
+                const diaCompra = Math.min(Number(despesa.dia_compra || dataBR.dia), ultimoDiaMes)
                 DespesaModel.addDespesa(
                     despesa.descricao,
                     despesa.valor,
@@ -49,7 +54,7 @@ export const fechaFaturas = async () => {
                     despesa.casal,
                     despesa.categoria,
                     0,
-                    `${anoNovo}-${(Number(mesNovo) + 1).toString().padStart(2, '0')}-${dataBR.dia}T00:00:00.000Z`,
+                    `${anoNovo}-${mesCompra.toString().padStart(2, '0')}-${String(diaCompra).padStart(2, '0')}T12:00:00.000Z`,
                     null,
                     despesa.tipo,
                     0,
