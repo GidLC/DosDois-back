@@ -1,4 +1,5 @@
 import { pool } from "../../config/config.mjs";
+import { ensureDespesasFixasMes } from "../../features/despesas/utils/despesasFixasMes.mjs";
 
 const ignoraPagamentosFatura = `
     AND NOT (
@@ -45,6 +46,7 @@ class graficosModel {
     }
 
     static despesaPorCategoria = async (casal, usuario, mes, ano, parceiro, tipo, callback) => {
+        await ensureDespesasFixasMes(mes, ano, casal);
         const queryCategoria = `SELECT cat.id, cat.nome, cat.cat_sistema, c.codigo AS cod_cor, ic.ion_nome AS icone FROM categoria_tr AS cat 
                                     INNER JOIN cor AS c ON cat.cor = c.id 
                                     INNER JOIN icones AS ic ON cat.icone = ic.id
@@ -67,7 +69,7 @@ class graficosModel {
                 const filtroPagamentoFatura = table === "despesa" ? ignoraPagamentosFatura : ""
 
                 const saldoPorCategoriaBD = await new Promise((resolve, reject) => {
-                    const querySaldoPorCategoria = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE categoria = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? AND tipo = ? ${filtroPagamentoFatura}`
+                const querySaldoPorCategoria = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE categoria = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? AND tipo = ? ${table === 'despesas_fixas' ? 'AND cancelada = 0' : ''} ${filtroPagamentoFatura}`
                     pool.query(querySaldoPorCategoria, [categoria.id, casal, idUsuario, mes, ano, tipo], (err, results) => {
                         if (err) {
                             reject(err);
@@ -76,7 +78,7 @@ class graficosModel {
                     });
                 });
 
-                return saldoPorCategoriaBD[0].total_despesas || 0
+                return Number(saldoPorCategoriaBD[0].total_despesas) || 0
             }
 
             if (tipo == 0) {
@@ -102,6 +104,7 @@ class graficosModel {
 
     static despesaPorTag = async (casal, usuario, mes, ano, parceiro, callback) => {
         try {
+            await ensureDespesasFixasMes(mes, ano, casal);
             //Selecionar todas as tags 
             const queryTags = `SELECT id, nome FROM tags WHERE casal = ?`
 
@@ -124,7 +127,7 @@ class graficosModel {
                     const filtroPagamentoFatura = table === "despesa" ? ignoraPagamentosFatura : ""
 
                     const saldoPorTagBD = await new Promise((resolve, reject) => {
-                        const querySaldoPorTag = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE tag = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? ${filtroPagamentoFatura}`
+                        const querySaldoPorTag = `SELECT SUM(valor) AS total_despesas FROM ${table} WHERE tag = ? AND casal = ? AND usuario = ? AND mes = ? AND ano = ? ${table === 'despesas_fixas' ? 'AND cancelada = 0' : ''} ${filtroPagamentoFatura}`
                         pool.query(querySaldoPorTag, [tag.id, casal, idUsuario, mes, ano], (err, results) => {
                             if (err) {
                                 reject(err);

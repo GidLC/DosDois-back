@@ -10,12 +10,15 @@ import despesaRouter from './features/despesas/routes/despesaRoutes.mjs';
 import receitaRouter from './routes/transacao/receitaRoutes.mjs';
 import graficosRouter from './routes/graficos/GraficosRoutes.mjs';
 import saldosRouter from './routes/saldos/saldosRoutes.mjs';
+import SaldosModel from './models/saldos/saldosModel.mjs';
 import transfRouter from './routes/transacao/transferenciaRoutes.mjs';
 import objetivoRouter from './routes/objetivos/objetivosRoutes.mjs';
 import tagsRouter from './routes/tags/tagsRoutes.mjs';
 import cartoesRouter from './features/cartoes/routes/cartoesRoutes.mjs';
 import { fechaFaturas } from './jobs/fechaFaturas.mjs';
 import assinaturasRouter from './features/assinaturas/routes/assinaturasRoutes.mjs';
+import preferenciasModulosRouter from './features/preferencias/routes/preferenciasModulosRoutes.mjs';
+import eventoProdutoRouter from './features/telemetria/routes/eventoProdutoRoutes.mjs';
 
 app.use('/apiDDv1/auth', authRouter);
 app.use('/apiDDv1/receita', receitaRouter);
@@ -32,6 +35,8 @@ app.use('/apiDDv1/objetivos', objetivoRouter);
 app.use('/apiDDv1/tags', tagsRouter);
 app.use('/apiDDv1/cartoes', cartoesRouter)
 app.use('/apiDDv1/subs', assinaturasRouter)
+app.use('/apiDDv1/configuracoes', preferenciasModulosRouter)
+app.use('/apiDDv1/telemetria', eventoProdutoRouter)
 
 const PORT = process.env.PORT || 3000;
 
@@ -44,5 +49,14 @@ cron.schedule('00 00 * * *', () => {
   console.log("Executando cron da Meia noite")
   fechaFaturas()
 })
+
+cron.schedule('5 0 1 * *', async () => {
+  try {
+    await SaldosModel.snapshotMesesFechados();
+    console.log('Saldos mensais fechados e salvos com sucesso.');
+  } catch (error) {
+    console.error('Não foi possível salvar os saldos mensais fechados:', error);
+  }
+}, { timezone: 'America/Sao_Paulo' });
 
 export default PORT;

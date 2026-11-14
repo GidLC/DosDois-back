@@ -1,4 +1,5 @@
 import { pool } from "../../config/config.mjs";
+import SaldosModel from "../saldos/saldosModel.mjs";
 import { decrementaUso } from "../../features/assinaturas/utils/decrementaUso.mjs";
 import { incrementaUso } from "../../features/assinaturas/utils/IncrementaUso.mjs";
 
@@ -284,6 +285,7 @@ class BancoModel {
 
     static alteraSaldoincial = async (id, casal, novoSaldo, callback) => {
         try {
+            await SaldosModel.snapshotMesesFechados(casal);
             const query = 'UPDATE banco SET saldo_inicial = ? WHERE id = ? AND casal = ?'
             pool.query(query, [novoSaldo, id, casal], (err, results) => {
                 if (err) {

@@ -15,7 +15,7 @@ export const calcLimiteDisp = async (cartao) => {
     const qFixas = `
                     SELECT SUM(valor) AS total
                     FROM despesas_fixas
-                    WHERE cartao = ?
+                    WHERE cartao = ? AND cancelada = 0
                 `;
     const [fixPend] = await queryAsync(qFixas, [cartao.id]);
     const fixas = Number(fixPend.total) || 0;

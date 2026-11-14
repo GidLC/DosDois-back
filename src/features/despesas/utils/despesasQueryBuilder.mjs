@@ -49,6 +49,10 @@ export const despesasQueryBuilder = ({
         WHERE des.casal = ?
     `;
 
+    if (tabela === 'despesas_fixas') {
+        query += ` AND des.cancelada = 0`;
+    }
+
     const params = [casal];
 
     // ------ FILTROS ------

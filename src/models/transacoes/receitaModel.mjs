@@ -45,8 +45,11 @@ class ReceitaModel {
                     )
                 }
 
-                await Promise.all(promisses);
-                return callback(null, { message: 'Receita cadastrada com sucesso!' })
+                const resultados = await Promise.all(promisses);
+                return callback(null, {
+                    message: 'Receita cadastrada com sucesso!',
+                    ids: resultados.map((resultado) => resultado.insertId).filter(Boolean)
+                })
 
             } else if (fixa == 1) {
                 //Cadastro de receita fixa

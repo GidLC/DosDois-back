@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS dosdois.eventos_produto (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  evento VARCHAR(48) NOT NULL,
+  casal VARCHAR(64) NOT NULL,
+  usuario INT NOT NULL,
+  modulo VARCHAR(32) NULL,
+  perfil_anterior VARCHAR(24) NULL,
+  perfil_novo VARCHAR(24) NULL,
+  valor_anterior TINYINT(1) NULL,
+  valor_novo TINYINT(1) NULL,
+  metadata_json TEXT NULL,
+  dedupe_key VARCHAR(160) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_eventos_produto_dedupe (dedupe_key),
+  INDEX idx_evento_produto_evento_data (evento, created_at),
+  INDEX idx_evento_produto_casal_data (casal, created_at),
+  INDEX idx_evento_produto_usuario_data (usuario, created_at),
+  INDEX idx_evento_produto_modulo_data (modulo, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
