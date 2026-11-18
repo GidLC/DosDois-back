@@ -242,7 +242,7 @@ VALUES
     'limites_maiores',
     NULL,
     'Mais espaco para organizar tudo',
-    'Mais bancos, categorias, tags, objetivos e cartoes para o casal.',
+    'Mais bancos, tags, objetivos e cartoes para o casal.',
     'Amplia os limites do plano Free para organizar mais contas, metas e cartoes conforme a vida financeira cresce.',
     'layers',
     'limites',
@@ -320,16 +320,16 @@ SELECT b.id, ctx.contexto, ctx.titulo_override, ctx.descricao_override, ctx.orde
 FROM dosdois.beneficios b
 JOIN (
   SELECT 'dodo_whatsapp' codigo, 'upgrade_whatsapp' contexto, 'Dodo no WhatsApp' titulo_override, 'Lance gastos, consulte saldos e acompanhe a rotina sem abrir o app.' descricao_override, 10 ordem
-  UNION ALL SELECT 'limites_maiores', 'upgrade_limites', 'Mais espaco para cadastrar', 'Cadastre mais bancos, categorias, tags, objetivos e cartoes conforme o casal evolui.', 10
+  UNION ALL SELECT 'limites_maiores', 'upgrade_limites', 'Mais espaco para cadastrar', 'Cadastre mais bancos, tags, objetivos e cartoes conforme o casal evolui.', 10
   UNION ALL SELECT 'fechamento_mensal', 'upgrade_fechamento', 'Fechamento mensal do casal', 'Revise o mes com uma visao propria para assinantes.', 10
   UNION ALL SELECT 'sem_anuncios', 'checkout', 'Sem propagandas', 'Experiencia mais limpa para acompanhar as financas.', 10
   UNION ALL SELECT 'dodo_whatsapp', 'checkout', 'Dodo no WhatsApp', 'Automacao para facilitar registros e consultas.', 20
-  UNION ALL SELECT 'limites_maiores', 'checkout', 'Mais limites no app', 'Mais bancos, categorias, tags, objetivos e cartoes.', 30
+  UNION ALL SELECT 'limites_maiores', 'checkout', 'Mais limites no app', 'Mais bancos, tags, objetivos e cartoes.', 30
   UNION ALL SELECT 'fechamento_mensal', 'checkout', 'Fechamento mensal', 'Uma rotina para revisar o mes do casal.', 40
   UNION ALL SELECT 'graficos_completos', 'checkout', 'Graficos completos', 'Mais clareza para entender a vida financeira.', 50
   UNION ALL SELECT 'sem_anuncios', 'site_pricing', 'Sem propagandas', 'Mais foco para organizar a rotina financeira.', 10
   UNION ALL SELECT 'dodo_whatsapp', 'site_pricing', 'Dodo no WhatsApp', 'Registros e consultas direto pelo WhatsApp.', 20
-  UNION ALL SELECT 'limites_maiores', 'site_pricing', 'Bancos, categorias, tags, objetivos e cartoes ampliados', 'Mais liberdade para organizar todos os detalhes do casal.', 30
+  UNION ALL SELECT 'limites_maiores', 'site_pricing', 'Bancos, tags, objetivos e cartoes ampliados', 'Mais liberdade para organizar todos os detalhes do casal.', 30
   UNION ALL SELECT 'fechamento_mensal', 'site_pricing', 'Fechamento mensal do casal', 'Revisao mensal para alinhar combinados e proximos passos.', 40
   UNION ALL SELECT 'graficos_completos', 'site_pricing', 'Todos os graficos do app', 'Analises para enxergar melhor o dinheiro do casal.', 50
 ) ctx ON ctx.codigo = b.codigo
