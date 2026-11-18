@@ -1,4 +1,7 @@
-const EmailCadastro = (nome, codigoCasal, url) =>  {
+const EmailCadastro = (nome, codigoCasal, url, fimTrialPremium) =>  {
+  const trialPremium = fimTrialPremium
+    ? `<p><span class="highlight">Você ganhou 30 dias de Premium grátis</span>, válidos até ${fimTrialPremium}. Não pedimos cartão e não há cobrança automática. Depois dessa data, sua conta volta ao plano Free; você poderá assinar o Premium se quiser.</p>`
+    : '';
   const conviteParceiro = url
     ? `
         <div class="invite-box">
@@ -127,6 +130,7 @@ return `
         <h1>Confirmação de Cadastro</h1>
         <p>Olá, ${nome}</p>
         <p>Seu cadastro no <span class="highlight">DosDois</span> foi criado. Você já pode começar a organizar suas finanças pelo app, mesmo antes de convidar seu parceiro.</p>
+        ${trialPremium}
         <p>Seu código de casal é <span class="highlight">${codigoCasal}</span>. Ele identifica seu convite caso vocês decidam usar o app juntos.</p>
         ${conviteParceiro}
         <p>Se você não solicitou este cadastro, por favor, ignore este e-mail.</p>

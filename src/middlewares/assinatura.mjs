@@ -74,7 +74,8 @@ const loadCurrentUsage = async (auth, moduleCode, moduleId) => {
 };
 
 const accessPlanSelect = `
-    SELECT p.*, a.fim, a.id AS assinatura_id, a.status AS assinatura_status
+    SELECT p.*, a.fim, a.id AS assinatura_id, a.status AS assinatura_status,
+           a.billing_provider, a.provider_status
     FROM assinaturas AS a
     JOIN planos p ON p.id = a.plano_id
     WHERE a.casal = ?
