@@ -4,6 +4,10 @@ const addObjetivo = (req, res) => {
     const casal = req.header('auth')
     const { descricao, valor_final, valor_inicial, status, prazo, cor, icone } = req.body
 
+    if (!Number.isInteger(Number(icone)) || Number(icone) <= 0) {
+        return res.status(400).json({ error: 'Selecione um ícone válido para o objetivo' })
+    }
+
     ObjetivoModel.addObjetivo(descricao, valor_final, valor_inicial, status, prazo, casal, cor, icone, (err, results) => {
         if (err) {
             console.error('Erro ao cadastrar objetivo', err);
@@ -103,6 +107,10 @@ const mudaStatusObjetivo = (req, res) => {
 const editObjetivo = (req, res) => {
     const casal = req.header('auth')
     const { id, descricao, valor_final, prazo, cor, icone } = req.body
+
+    if (!Number.isInteger(Number(icone)) || Number(icone) <= 0) {
+        return res.status(400).json({ error: 'Selecione um ícone válido para o objetivo' })
+    }
 
     ObjetivoModel.editObjetivo(casal, id, descricao, valor_final, prazo, cor, icone, (err, results) => {
         if (err) {

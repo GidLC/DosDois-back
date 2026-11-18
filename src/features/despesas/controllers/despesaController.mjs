@@ -60,7 +60,7 @@ const readDespesa = (req, res) => {
         const filtrosBase = {
             usuario: Number(usuario) || null,
             casal: casal || null,
-            mes: mes ? Number(mes) : null,
+            mes: mes !== undefined && mes !== '' ? Number(mes) : null,
             ano: ano ? Number(ano) : null,
             dataInicio: dataInicio || null,
             dataFim: dataFim || null,
