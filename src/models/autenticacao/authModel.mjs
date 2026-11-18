@@ -36,6 +36,65 @@ const safeIncrementaUso = async (casal, modulo, qtd = 1) => {
   }
 };
 
+const ativarTrialPremiumNovoCasal = async (casal, usuario) => {
+  const [planosPremium] = await pool.promise().query(
+    `SELECT id FROM planos WHERE LOWER(codigo) = 'premium' LIMIT 1`
+  );
+  const planoPremium = planosPremium[0];
+
+  if (!planoPremium) {
+    throw new Error('Plano Premium não encontrado para ativar o teste de 30 dias.');
+  }
+
+  const [assinaturas] = await pool.promise().query(
+    `SELECT a.id
+     FROM assinaturas AS a
+     JOIN planos AS p ON p.id = a.plano_id
+     WHERE a.casal = ? AND LOWER(p.codigo) = 'free' AND a.status = 'ativa'
+     ORDER BY a.id DESC
+     LIMIT 1`,
+    [casal]
+  );
+  const assinaturaFree = assinaturas[0];
+
+  if (!assinaturaFree) {
+    throw new Error(`Assinatura FREE inicial não encontrada para ativar o teste do casal ${casal}.`);
+  }
+
+  // A data final e inclusiva em loadPlan; hoje + 29 cobre 30 dias corridos.
+  const [resultado] = await pool.promise().query(
+    `UPDATE assinaturas
+     SET plano_id = ?,
+         inicio = CURDATE(),
+         fim = DATE_ADD(CURDATE(), INTERVAL 29 DAY),
+         status = 'ativa',
+         mp_status = NULL,
+         mp_preapproval_id = NULL,
+         billing_provider = 'promocional',
+         provider_subscription_id = NULL,
+         provider_checkout_id = NULL,
+         provider_external_reference = ?,
+         provider_customer_id = NULL,
+         provider_payment_id = NULL,
+         provider_status = 'premium_trial_cadastro',
+         updated_at = NOW()
+     WHERE id = ? AND status = 'ativa'`,
+    [planoPremium.id, `TRIAL_PREMIUM_CADASTRO_30D:${casal}:${usuario}`, assinaturaFree.id]
+  );
+
+  if (resultado.affectedRows !== 1) {
+    throw new Error(`Não foi possível ativar o teste Premium para o casal ${casal}.`);
+  }
+
+  const [assinaturaAtualizada] = await pool.promise().query(
+    `SELECT DATE_FORMAT(fim, '%d/%m/%Y') AS fim_trial
+     FROM assinaturas WHERE id = ? LIMIT 1`,
+    [assinaturaFree.id]
+  );
+
+  return assinaturaAtualizada[0]?.fim_trial || null;
+};
+
 const isFreePlan = (plano) => String(plano?.codigo || '').toLowerCase() === 'free';
 const hasWhatsIntegration = (plano) => !isFreePlan(plano) && (plano?.has_whatsapp === true || Number(plano?.has_whatsapp) === 1);
 
@@ -163,11 +222,14 @@ const enviaCodigoValidacaoWhats = async ({ userId, fone, url }) => {
   }
 };
 
-const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, userId }) => {
+const sendCadastroNotifications = async ({ email, fone, nome, codigoCasal, url, userId, fimTrialPremium }) => {
   const notifications = [];
 
   if (email) {
-    notifications.push(enviaEmail(email, "Cadastro no DosDois", EmailCadastro(nome, codigoCasal, url)));
+    const assunto = fimTrialPremium
+      ? "Você ganhou 30 dias de Premium no DosDois"
+      : "Cadastro no DosDois";
+    notifications.push(enviaEmail(email, assunto, EmailCadastro(nome, codigoCasal, url, fimTrialPremium)));
   }
 
   if (fone) {
@@ -506,7 +568,9 @@ const criarUsuarioBase = async ({ nome, email, senha, fone, sexo, foto }) => {
     );
   });
 
-  await sendCadastroNotifications({ email, fone, nome, codigoCasal, url, userId });
+  const fimTrialPremium = await ativarTrialPremiumNovoCasal(codigoCasal, userId);
+
+  await sendCadastroNotifications({ email, fone, nome, codigoCasal, url, userId, fimTrialPremium });
 
   const [usuarioCriado] = await new Promise((resolve, reject) => {
     pool.query('SELECT * FROM usuario WHERE id = ?', [userId], (err, results) => {
